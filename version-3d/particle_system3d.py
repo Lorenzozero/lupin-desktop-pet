@@ -10,7 +10,7 @@ from panda3d.core import (
 from direct.interval.IntervalGlobal import Sequence, LerpPosInterval, LerpScaleInterval, Func
 
 class Particle3D:
-    def __init__(self, node, velocity, life, gravity=True):
+    def __init__(self, node, velocity, life, gravity=True, particle_type="default"):
         self.node = node
         self.vx = velocity[0]
         self.vy = velocity[1]
@@ -19,15 +19,32 @@ class Particle3D:
         self.max_life = life
         self.gravity = gravity
         self.spin = random.uniform(-180, 180)
+        self.type = particle_type
+        self.wind_offset = random.uniform(0, math.pi * 2)
 
     def update(self, dt):
+        # Physics
         if self.gravity:
             self.vz -= 9.8 * dt
+            
+        # Wind effect per meteo
+        if self.type in ["snow", "leaf"]:
+            wind_x = math.sin(self.wind_offset + self.life * 3) * 0.5
+            self.vx += wind_x * dt
+            
         x, y, z = self.node.getPos()
         self.node.setPos(x + self.vx * dt, y + self.vy * dt, z + self.vz * dt)
         self.node.setR(self.node.getR() + self.spin * dt)
+        
+        # Alpha decay
         alpha = self.life / self.max_life
         self.node.setAlphaScale(alpha)
+        
+        # Scale per snow
+        if self.type == "snow":
+            scale = 0.15 + (1 - alpha) * 0.1
+            self.node.setScale(scale)
+            
         self.life -= dt
         return self.life > 0
 
@@ -38,7 +55,6 @@ class ParticleSystem3D:
         self.root = render.attachNewNode("particles")
 
     def _make_quad(self, size=0.15):
-        """Crea un quad billboarded per ogni particella"""
         format = GeomVertexFormat.getV3n3c4t2()
         vdata = GeomVertexData("particle", format, Geom.UHDynamic)
         vertex = GeomVertexWriter(vdata, "vertex")
@@ -104,6 +120,41 @@ class ParticleSystem3D:
         quad.setColor(1, 0.3, 0.5, 1)
         p = Particle3D(quad, (random.uniform(-1, 1), 0, random.uniform(2, 4)),
                        0.8, gravity=False)
+        self.particles.append(p)
+        
+    # ── Weather particles ─────────────────────────────────────
+    
+    def emit_rain_drop(self, pos):
+        quad = self._make_quad(0.08)
+        quad.setPos(pos)
+        quad.setColor(0.7, 0.8, 1.0, 0.6)
+        p = Particle3D(quad, (0, 0, -12), 1.2, gravity=False)
+        self.particles.append(p)
+        
+    def emit_snowflake(self, pos):
+        quad = self._make_quad(0.15)
+        quad.setPos(pos)
+        quad.setColor(1.0, 1.0, 1.0, 0.9)
+        p = Particle3D(quad, (random.uniform(-0.5, 0.5), 0, random.uniform(-1.5, -0.8)),
+                       random.uniform(2.0, 4.0), gravity=False, particle_type="snow")
+        self.particles.append(p)
+        
+    def emit_leaf(self, pos):
+        colors = [Vec4(0.8, 0.5, 0.2, 1), Vec4(0.9, 0.6, 0.1, 1), Vec4(0.7, 0.3, 0.1, 1)]
+        quad = self._make_quad(0.2)
+        quad.setPos(pos)
+        quad.setColor(random.choice(colors))
+        p = Particle3D(quad, (random.uniform(-1, 1), 0, random.uniform(-2, -1)),
+                       random.uniform(2.5, 5.0), gravity=False, particle_type="leaf")
+        self.particles.append(p)
+        
+    def emit_magic_sparkle(self, pos):
+        quad = self._make_quad(random.uniform(0.1, 0.3))
+        quad.setPos(pos)
+        colors = [Vec4(1, 0.5, 1, 1), Vec4(0.5, 1, 1, 1), Vec4(1, 1, 0.5, 1)]
+        quad.setColor(random.choice(colors))
+        p = Particle3D(quad, (random.uniform(-2, 2), 0, random.uniform(-3, 1)),
+                       random.uniform(0.8, 1.5))
         self.particles.append(p)
 
     def update(self, dt):
