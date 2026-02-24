@@ -73,18 +73,87 @@ Per usare il tuo modello 3D di Lupin:
 
 ---
 
+## 🎮 Advanced Systems
+
+### 🏆 Achievements (10+ sblocchi)
+- **First Steal**: ruba la prima icona
+- **Master Thief**: 100 furti totali → sblocca skin Gold
+- **Speedrunner**: 5 icone in 30s → speed boost
+- **Combo Master**: combo x10 → particelle fuoco
+- **Ninja**: nascosto 5min → invisibilità
+- **Untouchable**: evadi cursore 2min → teleport
+- **Marathon**: 1h di gioco → emote dance
+- **Konami Code**: inserisci codice segreto → god mode
+- **Midnight Thief**: gioca alle 00:00 → moon particles
+
+### 📊 Stats Tracker
+Traccia persistentemente:
+- Furti totali / catture
+- Playtime totale
+- Combo massimo
+- Distanza percorsa (km)
+- Sessioni giocate
+- Personalità preferita
+- Record velocità
+
+### 👥 Multiplayer Locale
+Spawna fino a **4 pet contemporanei** sullo stesso desktop:
+```python
+multi = MultiplayerManager(sw, sh, render)
+multi.spawn_pet("Lupin Jr.", personality="playful")
+multi.spawn_pet("Shadow", personality="sneaky")
+```
+- Interagiscono tra loro (bounce, scambio bottino)
+- Colori diversi per distinguerli
+- AI indipendente per ognuno
+
+### 🎨 Skin System (7 skin)
+- **Default**: Lupin classico
+- **Gold**: Re Mida (tutto oro) → unlock: 100 furti
+- **Rainbow**: Colori dinamici → unlock: sacco pieno
+- **Ghost**: Semi-trasparente → unlock: ninja achievement
+- **Fire**: Tracce di fuoco → unlock: combo master
+- **Ice**: Glaciale → unlock: untouchable
+- **Neon**: Cyberpunk → unlock: speedrun
+
+### 🎮 Mini-Games
+3 mini-giochi integrati:
+
+1. **Catch The Icon**: Clicca icone prima che scompaiano (30s)
+2. **Pet Race**: Corri evitando ostacoli fino al traguardo
+3. **Icon Memory**: Memorizza sequenza di icone (stile Simon Says)
+
+Attivabili con comando speciale o dopo tot furti.
+
+### 🌟 Easter Eggs
+- **Konami Code** (↑↑↓↓←→←→BA): God mode
+- **Midnight spawn**: Effetti speciali se avviato a mezzanotte
+- **Collision scambio**: Due pet che si scontrano scambiano il bottino
+- **Weather trigger**: Pioggia se rubate tutte le icone
+
+---
+
 ## 🛠️ Architettura
 
 ```
 version-3d/
-├── main.py               # Entry point Panda3D
-├── pet3d_app.py          # ShowBase: rendering, camera, lighting, tasks
-├── pet3d_brain.py        # State machine con physics-based movement
-├── particle_system3d.py  # Sistema particelle 3D billboarded
-├── desktop_hooks.py      # Win32 API icone desktop
+├── main.py                   # Entry point
+├── pet3d_app.py              # Core Panda3D
+├── pet3d_brain.py            # State machine AI
+├── particle_system3d.py      # Particelle + weather
+├── facial_animator.py        # Espressioni facciali
+├── voice_system.py           # Text-to-speech
+├── weather_system.py         # Meteo dinamico
+├── ai_chat.py                # OpenAI integration
+├── achievements.py           # Sistema achievements
+├── stats_tracker.py          # Statistiche persistenti
+├── multiplayer_manager.py    # Multiplayer locale
+├── skin_manager.py           # Sistema skin
+├── minigames.py              # Mini-giochi
+├── desktop_hooks.py          # Win32 API
 ├── requirements.txt
 └── models/
-    └── lupin.glb            # ← Metti qui il tuo modello 3D!
+    └── lupin.glb                # Modello 3D
 ```
 
 ---
@@ -93,41 +162,23 @@ version-3d/
 
 | Tasto | Azione |
 |---|---|
-| Click sinistro | Cattura Lupin (se ha icone) |
-| ESC | Chiude e ripristina icone |
+| Click sinistro | Cattura Lupin |
+| ESC | Chiude e ripristina |
+| A | Apri pannello achievements |
+| S | Mostra statistiche |
+| M | Spawna secondo pet (multiplayer) |
+| G | Avvia mini-game casuale |
+| K | Inserisci Konami Code |
 
 ---
 
-## 🔧 Troubleshooting
+## 📊 Stats & Progress
 
-### Finestra non trasparente
-- Assicurati di avere **Aero abilitato** (Windows 10/11 con GPU discreta)
-- Prova ad eseguire come **Amministratore**
-
-### GLB non si carica
-```bash
-pip install panda3d-gltf
-```
-Se il modello non viene trovato, il sistema usa automaticamente un **fallback geometrico 3D procedurale**
-
-### Performance
-- Riduci `count` nelle chiamate `burst_sparkle()` in `pet3d_app.py`
-- Abbassa la risoluzione delle texture del modello in Blender prima dell'export
+Tutti i dati sono salvati localmente in JSON:
+- `achievements.json` - progress achievements
+- `player_stats.json` - statistiche giocatore
+- `skins.json` - skin sbloccate
 
 ---
 
-## 📊 Differenze vs Versione 2D
-
-| Feature | 2D (PyQt5) | 3D (Panda3D) |
-|---|---|---|
-| Modello | PNG sprite 90x90 | GLB mesh con armatura |
-| Animazioni | Framesheet PNG | Skeletal animation clip |
-| Luci | Gradiente statico | 3 luci dinamiche real-time |
-| Particelle | QPainter 2D | Quad billboarded 3D |
-| Ombra | Ellisse gradiente | Blob shadow 3D |
-| Performance | ≈ 2% CPU | ≈ 5-10% CPU + GPU |
-| Setup | pip install 2 pkg | pip install 3 pkg + modello |
-
----
-
-*Costruito per chi vuole un desktop pet degno di un game AAA.* 🎩✨
+*Il desktop pet più completo mai creato.* 🎩✨🎮
