@@ -2,7 +2,7 @@
 
 > *"Se mi prendi ti ridò il tuo desktop esattamente com'era!"*
 
-Un desktop pet in stile **Arsène Lupin** che ruba le icone del tuo desktop Windows, le infila nel sacco e ti sfida a catturarlo mentre corre per lo schermo e si nasconde dietro le finestre.
+Un desktop pet in stile **Arsène Lupin** con **fisica realistica**, **particelle dinamiche**, **ombre proiettate** e **animazioni fluide**. Ruba le icone del tuo desktop Windows, le infila nel sacco e ti sfida a catturarlo mentre corre per lo schermo.
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)
@@ -10,14 +10,39 @@ Un desktop pet in stile **Arsène Lupin** che ruba le icone del tuo desktop Wind
 
 ---
 
-## 🎮 Features
+## ✨ Advanced Features
 
-- **Furto Dinamico**: Lupin si avvicina alle icone del desktop, le "ruba" e le nasconde fuori dallo schermo
-- **Animazioni Realistiche**: Gravità, movimento fluido, sprite che cambiano in base allo stato
-- **Inseguimento Intelligente**: Scappa dal cursore quando ti avvicini, rendendo difficile catturarlo
-- **Nascondimento**: Si nasconde dietro le finestre aperte mostrando solo un angolino
-- **Interazione Completa**: Cliccalo per costringerlo a restituire tutte le icone alle posizioni originali
-- **Overlay Trasparente**: Finestra borderless che non interferisce con il normale utilizzo del desktop
+### 🎨 Visual Effects
+- **Sistema Particellare**: Esplosioni dorate quando ruba, scie di polvere in corsa, cuori quando si arrende
+- **Ombre Dinamiche**: Ombre proiettate radiali che seguono il pet
+- **Motion Trail**: Scia fantasma durante la corsa ad alta velocità
+- **Screen Shake**: Vibrazione dello schermo durante eventi drammatici
+- **Flash Effect**: Flash bianco al momento del furto
+- **Squash & Stretch**: Deformazione realistica del corpo durante movimento veloce
+
+### 🎭 Animazioni Avanzate
+- **Smooth Physics**: Sistema di accelerazione/decelerazione con velocity-based movement
+- **Evasive Maneuvers**: Movimenti laterali imprevedibili durante la fuga
+- **Pop-in Animations**: Fumetti che crescono con easing elastico
+- **Bounce Effect**: Sacco che rimbalza sopra la testa
+- **Blink System**: Occhi che si chiudono casualmente per realismo
+
+### 🧠 Sistema di Personalità
+Ogni sessione, Lupin assume una personalità casuale che influenza il comportamento:
+
+- **Aggressive** 😈: Ruba più icone (90% probabilità), distanza di fuga ridotta (250px), veloce
+- **Playful** 😜: Equilibrato (70% probabilità), distanza media (350px), comportamento standard
+- **Sneaky** 🤫: Più cauto (50% probabilità), distanza elevata (450px), timing più lungo
+
+---
+
+## 🎮 Features Core
+
+- **Furto Dinamico**: Si avvicina alle icone, le "ruba" e le nasconde fuori dallo schermo
+- **Inseguimento Intelligente**: Scappa dal cursore con movimenti evasivi
+- **Nascondimento**: Si nasconde dietro finestre aperte mostrando solo un angolino
+- **Interazione Completa**: Cliccalo per restituire tutte le icone
+- **Overlay Trasparente**: Finestra borderless che non interferisce con il desktop
 
 ---
 
@@ -35,7 +60,7 @@ git clone https://github.com/Lorenzozero/lupin-desktop-pet.git
 cd lupin-desktop-pet
 
 # Installa le dipendenze
-pip install PyQt5 pywin32
+pip install -r requirements.txt
 
 # Avvia Lupin
 python main.py
@@ -47,36 +72,41 @@ python main.py
 
 ### Architettura
 
-Il progetto è strutturato in 4 moduli principali:
-
 ```
 lupin-desktop-pet/
 ├── main.py              # Entry point
-├── pet_window.py        # Finestra trasparente PyQt5 + rendering
-├── desktop_hooks.py     # Win32 API per manipolare icone desktop
-├── pet_brain.py         # State machine e AI comportamentale
+├── pet_window.py        # PyQt5 window + advanced rendering + particle system
+├── desktop_hooks.py     # Win32 API hooks per manipolare icone
+├── pet_brain.py         # State machine + personality system + smooth physics
 └── sprites/             # (opzionale) PNG custom per animazioni
 ```
 
 ### Stati Comportamentali
 
-1. **IDLE**: Lupin passeggia lentamente per lo schermo
-2. **APPROACHING**: Si avvicina a un'icona target
-3. **STEALING**: Animazione del furto → l'icona sparisce nel sacco
-4. **TAUNTING**: Si ferma al centro, zooma la faccia e ti provoca
-5. **RUNNING**: Scappa dal cursore in modo intelligente
-6. **HIDING**: Si nasconde dietro una finestra, mostrando solo un angolino
-7. **SURRENDER**: Restituisce tutte le icone rubate
+1. **IDLE**: Passeggia lentamente, personalità influenza timing di attacco
+2. **APPROACHING**: Si avvicina a un'icona con accelerazione fluida
+3. **STEALING**: Animazione furto → particelle dorate + screen shake + flash
+4. **TAUNTING**: Centro schermo, fumetto animato, linguaccia
+5. **RUNNING**: Fuga con evasive maneuvers + motion trail + dust particles
+6. **HIDING**: Si nasconde dietro finestre, solo angolino visibile
+7. **SURRENDER**: Particelle cuore, restituzione icone
 
-### Tecnologie Utilizzate
+### Effetti Visivi Dettagliati
 
-- **PyQt5**: Finestra trasparente, rendering sprite, input handling
-- **pywin32**: Accesso diretto alle Win32 API per:
-  - Trovare l'handle di `SysListView32` (il componente che gestisce le icone del desktop)
-  - Leggere le posizioni originali (`LVM_GETITEMPOSITION`)
-  - Spostare le icone (`LVM_SETITEMPOSITION`)
-  - Enumerare finestre aperte (`EnumWindows`, `GetWindowRect`)
-- **ctypes**: Manipolazione memoria processo per lettura/scrittura coordinate icone
+**Particle System**
+- Gravità fisica su ogni particella
+- Alpha decay per dissolvenza
+- 3 tipi: esplosioni (oro), polvere (grigio), cuori (rosa)
+
+**Motion Trail**
+- Buffer di 8 posizioni precedenti
+- Alpha gradient per effetto fantasma
+- Attivo solo durante corsa veloce
+
+**Squash & Stretch**
+- Deformazione proporzionale alla velocità
+- Rotazione dinamica basata su sin wave
+- Ritorna a forma normale quando fermo
 
 ---
 
@@ -84,63 +114,102 @@ lupin-desktop-pet/
 
 ### Sprite Custom
 
-Per sostituire i placeholder colorati con sprite reali:
-
-1. Crea una cartella `sprites/` nella root del progetto
-2. Aggiungi i seguenti file PNG (90×90px):
-   - `idle.png`
-   - `stealing.png`
-   - `taunting.png`
-   - `running.png`
-   - `hiding.png`
-   - `surrender.png`
+1. Crea cartella `sprites/`
+2. Aggiungi PNG 90×90px:
+   - `idle.png`, `stealing.png`, `taunting.png`
+   - `running.png`, `hiding.png`, `surrender.png`
 
 ### Configurazione Comportamento
 
-Modifica `pet_brain.py` per personalizzare:
-
+**pet_brain.py**
 ```python
 class LupinBrain:
-    MAX_STEAL = 6  # Numero massimo di icone da rubare
-    # Altri parametri: velocità, distanza di fuga, timer, ecc.
+    MAX_STEAL = 8  # Numero massimo icone
+    
+    # Modifica valori personalità
+    "aggressive": 0.9,  # % probabilità rubare altra icona
+    flee_dist: 250      # distanza di fuga in pixel
+```
+
+**pet_window.py**
+```python
+# Intensità particelle
+for _ in range(20):  # numero particelle per esplosione
+    
+# Durata effetti
+self.shake_intensity = 8  # intensità screen shake
+self.flash_alpha = 255    # intensità flash
 ```
 
 ---
 
 ## ⌨️ Comandi
 
-- **Click sinistro su Lupin**: Durante la fase di fuga/nascondimento, lo costringe a restituire le icone
-- **ESC**: Chiude l'applicazione e ripristina immediatamente tutte le icone
+- **Click sinistro su Lupin**: Costringe resa immediata + particelle blu
+- **ESC**: Chiude applicazione + ripristino icone immediato
 
 ---
 
-## 🛠️ Possibili Estensioni
+## 🛠️ Tecnologie
 
-- [ ] **Integrazione AI**: Collegare a Ollama/LLM locale per decisioni comportamentali dinamiche
-- [ ] **Suoni**: Effetti sonori comici durante furto e linguaccia
-- [ ] **Tray Icon**: Controlli da system tray (pausa, configurazione, exit)
-- [ ] **Multi-monitor**: Supporto per setup con più schermi
-- [ ] **Modalità Produttività**: Trasforma gli scherzi in alert utili (security, notifiche, timer Pomodoro)
+- **PyQt5**: Finestra trasparente, rendering avanzato, smooth transforms
+- **pywin32**: Win32 API per manipolazione icone desktop
+- **ctypes**: Memoria processo per lettura/scrittura coordinate
+- **Custom Physics Engine**: Sistema velocità/accelerazione per movimento naturale
+
+---
+
+## 🔧 Performance
+
+- **60 FPS cap**: Timer a 16ms per fluidità
+- **Particle pooling**: Max ~50 particelle contemporanee
+- **Lazy icon refresh**: Update posizioni ogni 200 frame
+- **Hardware acceleration**: QT smooth transform rendering
 
 ---
 
 ## 🐛 Troubleshooting
 
+### Lag o stuttering
+- Riduci numero particelle in `pet_window.py` (linea esplosione: `range(20)` → `range(10)`)
+- Disabilita motion trail commentando sezione rendering trail
+
 ### Le icone non vengono ripristinate
-- Premi **ESC** per forzare il ripristino immediato
-- Se il problema persiste, fai refresh del desktop (F5) o riavvia `explorer.exe`
+- Premi **ESC** per forzare ripristino
+- Refresh desktop: F5 o riavvia `explorer.exe`
 
-### Il pet non è cliccabile
-- Il click-through è gestito dinamicamente. Assicurati che il cursore sia esattamente sopra lo sprite di Lupin
+### Pet non cliccabile
+- Il click-through è dinamico. Assicurati cursore sia esattamente sopra sprite
+- Prova durante fase TAUNTING quando è fermo al centro
 
-### Errore: "cannot find SysListView32"
-- Alcune configurazioni di Windows 11 nascondono le icone del desktop in modo diverso. Il codice include un fallback su `WorkerW`, ma potrebbero servire ulteriori adattamenti per setup particolari
+---
+
+## 📊 Statistiche Progetto
+
+- **Linee di codice**: ~600
+- **Stati AI**: 7
+- **Tipi particelle**: 3
+- **Personalità**: 3
+- **FPS target**: 60
+- **Max icone rubabili**: 8
+
+---
+
+## 🚀 Possibili Estensioni
+
+- [ ] **Integrazione Ollama**: AI locale decide comportamento in real-time
+- [ ] **Sound FX**: Effetti sonori comici (pygame)
+- [ ] **System Tray**: Controlli pause/config/exit
+- [ ] **Multi-monitor**: Supporto setup multipli
+- [ ] **Custom Triggers**: Alert su eventi (Wazuh, VirusTotal, prezzi)
+- [ ] **Multiplayer**: Più pet che interagiscono
+- [ ] **Achievements**: Sistema unlock skin/comportamenti
 
 ---
 
 ## 📜 License
 
-MIT License - Sentiti libero di modificare, estendere e condividere!
+MIT License - Modifica, estendi, condividi liberamente!
 
 ---
 
@@ -153,4 +222,4 @@ MIT License - Sentiti libero di modificare, estendere e condividere!
 
 ---
 
-*Costruito con carisma e determinazione. Perché anche il codice può avere stile.* 🎩✨
+*Costruito con carisma, determinazione e un sistema particellare degno di un AAA game.* 🎩✨
