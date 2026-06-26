@@ -521,33 +521,59 @@ class PetWindow(QMainWindow):
         self._draw_lupin(p, nfo, t_global)
         p.restore()
 
-        # 5a. Icona trasportata (carrying) – disegna sopra la testa
+        # 5a. Icona trasportata (carrying) – replica visiva sopra la testa
         if nfo.get("is_carrying") and nfo.get("carry_icon_pos"):
             cx_i, cy_i = nfo["carry_icon_pos"]
+            icon_name = nfo.get("carry_icon_name", "")
             sway = math.sin(t_global * 0.18) * 6
             bob  = math.sin(t_global * 0.22) * 3
+            ix = int(cx_i + sway)
+            iy = int(cy_i + bob)
             p.save()
-            p.translate(int(cx_i + sway), int(cy_i + bob))
-            # Alone luminoso
-            glow = QRadialGradient(0, 0, 52)
-            glow.setColorAt(0, QColor(255, 220, 60, 110))
+            p.translate(ix, iy)
+            # Alone luminoso pulsante
+            glow_r = 46 + math.sin(t_global * 0.14) * 6
+            glow = QRadialGradient(0, 0, glow_r)
+            glow.setColorAt(0, QColor(255, 220, 60, 120))
             glow.setColorAt(1, QColor(255, 220, 60, 0))
             p.setBrush(QBrush(glow)); p.setPen(Qt.NoPen)
-            p.drawEllipse(-52, -52, 104, 104)
-            # Riquadro icona grande
-            p.setBrush(QBrush(QColor(255, 252, 215, 235)))
-            p.setPen(QPen(QColor(200, 160, 30), 2.5))
+            p.drawEllipse(int(-glow_r), int(-glow_r), int(glow_r*2), int(glow_r*2))
+            # Ombra riquadro
+            p.setBrush(QBrush(QColor(0, 0, 0, 50)))
+            p.setPen(Qt.NoPen)
+            p.drawRoundedRect(-27, -27, 60, 60, 12, 12)
+            # Riquadro icona
+            p.setBrush(QBrush(QColor(255, 252, 215, 240)))
+            p.setPen(QPen(QColor(200, 160, 30), 2))
             p.drawRoundedRect(-30, -30, 60, 60, 12, 12)
-            # Emoji grande
-            p.setFont(QFont("Segoe UI Emoji", 28))
+            # Emoji: determina tipo in base al nome (folder se non riconosciuto)
+            name_lower = icon_name.lower()
+            if any(k in name_lower for k in ("python", ".py")): emoji = "🐍"
+            elif any(k in name_lower for k in ("chrome", "browser", "edge", "firefox")): emoji = "🌐"
+            elif any(k in name_lower for k in ("music", "spotify", "audio", "mp3")): emoji = "🎵"
+            elif any(k in name_lower for k in ("foto", "photo", "image", "img", ".jpg", ".png")): emoji = "🖼️"
+            elif any(k in name_lower for k in ("video", ".mp4", ".avi", "vlc")): emoji = "🎬"
+            elif any(k in name_lower for k in ("doc", "word", ".docx", ".pdf", "text")): emoji = "📄"
+            elif any(k in name_lower for k in ("trash", "recycle", "cestino")): emoji = "🗑️"
+            elif any(k in name_lower for k in ("game", "steam", "epic")): emoji = "🎮"
+            elif any(k in name_lower for k in (".exe", "setup", "install")): emoji = "⚙️"
+            else: emoji = "📁"
+            p.setFont(QFont("Segoe UI Emoji", 26))
             p.setPen(QColor(60, 40, 0))
-            p.drawText(QRect(-28, -28, 56, 56), Qt.AlignCenter, "📁")
-            # Freccia verso il basso con ombra
-            p.setPen(QPen(QColor(0, 0, 0, 60), 5, Qt.SolidLine, Qt.RoundCap))
-            p.drawLine(2, 32, 2, 55)
-            p.setPen(QPen(QColor(220, 60, 60), 3, Qt.SolidLine, Qt.RoundCap))
-            p.drawLine(0, 32, 0, 54)
-            p.drawLine(-7, 46, 0, 54);  p.drawLine(7, 46, 0, 54)
+            p.drawText(QRect(-28, -30, 56, 56), Qt.AlignCenter, emoji)
+            # Nome icona sotto il riquadro
+            if icon_name:
+                label = icon_name if len(icon_name) <= 16 else icon_name[:14] + "…"
+                # Sfondo etichetta
+                p.setFont(QFont("Segoe UI", 8, QFont.Bold))
+                fm = p.fontMetrics()
+                lw = fm.horizontalAdvance(label) + 10
+                p.setPen(Qt.NoPen)
+                p.setBrush(QBrush(QColor(0, 0, 0, 140)))
+                p.drawRoundedRect(-lw//2, 34, lw, 18, 5, 5)
+                # Testo
+                p.setPen(QPen(QColor(255, 255, 255)))
+                p.drawText(QRect(-lw//2, 34, lw, 18), Qt.AlignCenter, label)
             p.restore()
 
         # 5b. Sitting: disegna l'icona sotto di lui (piano)

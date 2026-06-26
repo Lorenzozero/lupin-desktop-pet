@@ -161,6 +161,10 @@ JOKES = {
     "click_restore":  ["Ehi! Ok, la rimetto! 😤",
                        "Va bene, va bene... la riporto! 😒",
                        "Stai bene attento! La rimetto a posto... 😑"],
+    "scusa_carrying": ["Scusa scusa! La rimetto a posto! 🙏",
+                       "Ok ok, mi sono fatto prendere la mano! 😅",
+                       "Aaah! Eccola qua, tieni! 😤",
+                       "Non ero io! ...Okay ero io. Scusa. 😇"],
     "burp":           ["BRUUUAP! 🤢",
                        "Scusate... la birra sale! 🍺",
                        "BRUAP! Eccellente qualità! 🤣",
@@ -238,7 +242,8 @@ class LupinBrain:
 
         # Carrying
         self.carry_icon_idx  = None
-        self.carry_icon_pos  = (0, 0)   # posizione attuale icona trasportata
+        self.carry_icon_pos  = (0, 0)   # posizione fake per il disegno
+        self.carry_icon_name = ""       # nome dell'icona trasportata
 
         # Sitting
         self.sit_target    = None
@@ -491,6 +496,9 @@ class LupinBrain:
                 # Raccoglie un'icona e la porta in giro
                 idx = random.choice(list(visible.keys()))
                 self.carry_icon_idx = idx
+                self.carry_icon_name = self.hooks.get_icon_name(idx)
+                # Nasconde l'icona reale off-screen (solo la replica disegnata è visibile)
+                self.hooks.set_icon_position(idx, -300, -300)
                 self.say("carrying")
                 self._transition(S.CARRYING)
                 return
@@ -685,19 +693,18 @@ class LupinBrain:
             self._transition(S.IDLE)
 
     def _carrying(self):
-        """Porta un'icona sopra la testa mentre passeggia."""
+        """Porta un'icona sopra la testa mentre passeggia.
+        L'icona reale è nascosta off-screen; solo la replica disegnata è visibile.
+        """
         self.mood = "happy"
         if self.carry_icon_idx is None:
             self._transition(S.IDLE)
             return
 
-        # Icona segue la testa di Lupin
-        head_x = int(self.x)
-        head_y = int(self.y) - 85
-        head_x = max(50, min(self.sw - 50, head_x))
-        head_y = max(50, min(self.sh - 80, head_y))
+        # Aggiorna solo la posizione fake per il rendering — l'icona reale è off-screen
+        head_x = max(50, min(self.sw - 50, int(self.x)))
+        head_y = max(50, min(self.sh - 80, int(self.y) - 85))
         self.carry_icon_pos = (head_x, head_y)
-        self.hooks.set_icon_position(self.carry_icon_idx, head_x, head_y)
 
         # Cammina in giro
         if self.timer % 90 == 0:
@@ -713,9 +720,14 @@ class LupinBrain:
             self.say("carrying")
 
         if self.timer > 600:
-            # Posa l'icona dove si trova
-            self.hooks.set_icon_position(self.carry_icon_idx, int(self.x), int(self.y) + 50)
+            # Ripristina l'icona alla posizione originale salvata
+            orig = self.hooks._saved_positions.get(self.carry_icon_idx)
+            if orig:
+                self.hooks.set_icon_position(self.carry_icon_idx, *orig)
+            else:
+                self.hooks.set_icon_position(self.carry_icon_idx, int(self.x), int(self.y) + 50)
             self.carry_icon_idx = None
+            self.carry_icon_name = ""
             self._transition(S.CELEBRATING)
 
     def _sitting(self):
@@ -1044,8 +1056,11 @@ class LupinBrain:
             orig = self.hooks._saved_positions.get(self.carry_icon_idx)
             if orig:
                 self.hooks.set_icon_position(self.carry_icon_idx, *orig)
+            else:
+                self.hooks.set_icon_position(self.carry_icon_idx, int(self.x), int(self.y) + 60)
             self.carry_icon_idx = None
-            self.hit_reaction = self.say("click_restore")
+            self.carry_icon_name = ""
+            self.hit_reaction = self.say("scusa_carrying")
             self._jump(14)
             self._transition(S.IDLE)
             self.hit_combo = 0
@@ -1133,6 +1148,7 @@ class LupinBrain:
             is_carrying=self.state == S.CARRYING,
             is_sitting=self.state == S.SITTING,
             carry_icon_pos=self.carry_icon_pos,
+            carry_icon_name=self.carry_icon_name,
             push_dir=self.push_dir,
             sit_target=self.sit_target,
             is_prank=self.state == S.PRANK,

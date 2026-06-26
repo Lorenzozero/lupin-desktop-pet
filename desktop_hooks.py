@@ -1,4 +1,4 @@
-import ctypes, ctypes.wintypes
+import ctypes, ctypes.wintypes, struct
 import win32gui, win32con, win32api
 import random, math
 
@@ -7,11 +7,12 @@ LVM_GETITEMCOUNT       = LVM_FIRST + 4
 LVM_GETITEMPOSITION    = LVM_FIRST + 16
 LVM_SETITEMPOSITION    = LVM_FIRST + 15
 LVM_SETITEMPOSITION32  = LVM_FIRST + 49
+LVM_GETITEMTEXT        = LVM_FIRST + 45
 LVS_AUTOARRANGE        = 0x0100
 
-# Accessi minimi per WriteProcessMemory
-PROC_WRITE = 0x0028   # PROCESS_VM_WRITE | PROCESS_VM_OPERATION
-PROC_READ  = 0x0018   # PROCESS_VM_READ  | PROCESS_VM_OPERATION
+PROC_WRITE     = 0x0028   # PROCESS_VM_WRITE | PROCESS_VM_OPERATION
+PROC_READ      = 0x0018   # PROCESS_VM_READ  | PROCESS_VM_OPERATION
+PROC_READWRITE = 0x0038   # READ | WRITE | OPERATION
 
 class DesktopHooks:
     def __init__(self):
@@ -92,6 +93,51 @@ class DesktopHooks:
             k32.VirtualFreeEx(hProc, pPt, 0, 0x8000)
             k32.CloseHandle(hProc)
         return positions
+
+    def get_icon_name(self, idx):
+        """Legge il nome dell'icona idx dal listview di Explorer."""
+        if not self._lv_hwnd or not self._pid:
+            return f"icona_{idx}"
+        k32 = ctypes.windll.kernel32
+        hProc = self._open_proc(PROC_READWRITE)
+        if not hProc:
+            return f"icona_{idx}"
+        try:
+            TEXT_SIZE = 520  # 260 wchar * 2
+            text_buf = k32.VirtualAllocEx(hProc, None, TEXT_SIZE, 0x3000, 0x04)
+            if not text_buf:
+                return f"icona_{idx}"
+            # LVITEM struct (64-bit): mask(4) iItem(4) iSubItem(4) state(4) stateMask(4)
+            #   [4 padding] pszText(8) cchTextMax(4) iImage(4) lParam(8)
+            LVIF_TEXT = 0x0001
+            lvitem = struct.pack('<IiiiIxxxxQii',
+                LVIF_TEXT, idx, 0, 0, 0, text_buf, 260, 0)
+            lv_buf = k32.VirtualAllocEx(hProc, None, len(lvitem), 0x3000, 0x04)
+            if not lv_buf:
+                k32.VirtualFreeEx(hProc, text_buf, 0, 0x8000)
+                return f"icona_{idx}"
+            written = ctypes.c_size_t(0)
+            k32.WriteProcessMemory(hProc, lv_buf, lvitem, len(lvitem), ctypes.byref(written))
+            win32gui.SendMessage(self._lv_hwnd, LVM_GETITEMTEXT, idx, lv_buf)
+            result = (ctypes.c_wchar * 260)()
+            read = ctypes.c_size_t(0)
+            k32.ReadProcessMemory(hProc, text_buf, result, TEXT_SIZE, ctypes.byref(read))
+            name = result.value.strip()
+            return name if name else f"icona_{idx}"
+        except Exception:
+            return f"icona_{idx}"
+        finally:
+            try:
+                if text_buf: k32.VirtualFreeEx(hProc, text_buf, 0, 0x8000)
+                if lv_buf:   k32.VirtualFreeEx(hProc, lv_buf,   0, 0x8000)
+            except Exception:
+                pass
+            k32.CloseHandle(hProc)
+
+    def get_all_names(self):
+        """Restituisce dict {idx: nome} per tutte le icone."""
+        count = win32gui.SendMessage(self._lv_hwnd, LVM_GETITEMCOUNT, 0, 0) if self._lv_hwnd else 0
+        return {i: self.get_icon_name(i) for i in range(count)}
 
     def save_positions(self):
         self._saved_positions = self.get_all_positions()
