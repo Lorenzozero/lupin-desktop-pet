@@ -1028,8 +1028,8 @@ class LupinBrain:
         if not self.is_jumping and self.timer % 80 == 0 and random.random() < 0.5:
             self._jump(16)
 
-        # Dopo ~500 frame si stanca e si accascia
-        if self.timer > 500 and random.random() < 0.005:
+        # Dopo ~250 frame (4s) si stanca e si accascia
+        if self.timer > 250 and random.random() < 0.012:
             # Scegli posizione di riposo: icona desktop o centro-basso schermo
             visible_icons = {k: v for k, v in self._icons.items()
                              if v[0] < self.sw - 60 and v[1] < self.sh - 60}
@@ -1041,7 +1041,7 @@ class LupinBrain:
             self._transition(S.EXHAUSTED)
             return
 
-        if self.timer > 300 and random.random() < 0.004:
+        if self.timer > 180 and random.random() < 0.006:
             wins = self.hooks.get_open_windows()
             if wins:
                 r = random.choice(wins)

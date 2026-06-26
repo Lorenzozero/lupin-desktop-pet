@@ -178,8 +178,6 @@ class PetWindow(QMainWindow):
         self.greeted = False
 
         self._prev_hit_reaction = ""
-        self._lbutton_prev = False
-        self._rbutton_prev = False
         self._last_lclick_t = 0    # per double-click detection
 
         self._icon_tick = 0
@@ -202,30 +200,20 @@ class PetWindow(QMainWindow):
     # ── Main loop ────────────────────────────────────────────
 
     def _loop(self):
-        # ── Click detection via GetAsyncKeyState (no thread, no hook timeout) ──
-        lbtn = bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
-        if lbtn and not self._lbutton_prev:
-            try:
-                mx, my = win32api.GetCursorPos()
-                now = self.brain.global_timer
-                if now - self._last_lclick_t < 30:   # double-click (≤500ms a 60fps)
-                    self._handle_double_click(mx, my)
-                else:
-                    self._handle_global_click(mx, my)
-                self._last_lclick_t = now
-            except Exception:
-                pass
-        self._lbutton_prev = lbtn
+        # ── Click detection: bit 0 = was-pressed-since-last-call (non perde click rapidi) ──
+        if ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x0001:
+            mx, my = win32api.GetCursorPos()
+            now = self.brain.global_timer
+            if now - self._last_lclick_t < 30:
+                self._handle_double_click(mx, my)
+            else:
+                self._handle_global_click(mx, my)
+            self._last_lclick_t = now
 
         # ── Right-click: petting ─────────────────────────────
-        rbtn = bool(ctypes.windll.user32.GetAsyncKeyState(0x02) & 0x8000)
-        if rbtn and not self._rbutton_prev:
-            try:
-                mx, my = win32api.GetCursorPos()
-                self._handle_right_click(mx, my)
-            except Exception:
-                pass
-        self._rbutton_prev = rbtn
+        if ctypes.windll.user32.GetAsyncKeyState(0x02) & 0x0001:
+            mx, my = win32api.GetCursorPos()
+            self._handle_right_click(mx, my)
 
         self._icon_tick += 1
         if self._icon_tick >= 200:
@@ -1477,7 +1465,7 @@ class PetWindow(QMainWindow):
         """Processa un click globale: reagisce solo se vicino a Lupin."""
         nfo = self.brain.info
         px, py = nfo["x"], nfo["y"]
-        if abs(mx - px) > 65 or abs(my - (py - 40)) > 90:
+        if abs(mx - px) > 75 or abs(my - (py - 40)) > 100:
             return
         self._do_hit(mx, my)
 
@@ -1586,7 +1574,7 @@ class PetWindow(QMainWindow):
 
         # ── Speech bubble reazione ───────────────────────────
         reaction = nfo.get("hit_reaction", "")
-        if reaction and reaction != self._prev_hit_reaction:
+        if reaction:
             self._say(reaction, 200)
             self._prev_hit_reaction = reaction
 
