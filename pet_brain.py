@@ -256,6 +256,31 @@ JOKES = {
                     "Tutti dormono. Io no. 😈",
                     "Mezzanotte. Ora X. 🕛",
                     "L'oscurità è la mia alleata. 🖤"],
+    "running_hit_1":   ["Ok ok LA RIDÒ! Ma ricordati la mia faccia! 😤",
+                         "Prendi! Ma non finisce qui! 😡",
+                         "Ecco la tua icona! Soddisfatto?! 😤",
+                         "Va bene, tieni! Ma ti tengo d'occhio! 👁️"],
+    "running_hit_2":   ["BASTARDO! Smettila di colpirmi! 💢",
+                         "NON MI FERMI! Sono LUPIN! 😤",
+                         "Lasciami andare, maleducato! 🤬",
+                         "Colpire chi scappa è da codardi! 😡"],
+    "running_hit_3":   ["CHIAMO LA POLIZIA! Ora basta! 🚔",
+                         "113! SÌ, HO IL NUMERO! 📞",
+                         "Arresto per molestie! VERGOGNA! ⚖️",
+                         "Sto chiamando Zenigata! E lui è PEGGIO! 🚨"],
+    "running_hit_fast":["Non mi prenderai MAI! 💨",
+                         "Corri corri... sono già sparito! 🏃",
+                         "Arrivederci, LENTONE! 👋",
+                         "Velocità massima! Addio! 💨"],
+    "icon_notice":     ["Bella questa icona... 🤔",
+                         "Hmm, questa mi fa gola... 😏",
+                         "Interessante... molto interessante. 🧐",
+                         "Cosa ci fa qui questa? 👀",
+                         "...cataloghiamo. Per dopo. 😈"],
+    "icon_sniff":      ["...profuma di furto facile. 😈",
+                         "Nessuno la noterà se sparisce. 🤫",
+                         "Questa è mia. Temporaneamente. 😏",
+                         "Bella posizione... ci tornerò. 🎩"],
 }
 
 class LupinBrain:
@@ -337,9 +362,15 @@ class LupinBrain:
         self.current_joke = ""
 
         # Sistema colpi
-        self.hit_combo      = 0
-        self.last_hit_timer = -999
-        self.hit_reaction   = ""
+        self.hit_combo        = 0
+        self.last_hit_timer   = -999
+        self.hit_reaction     = ""
+        self.running_hits     = 0   # colpi ricevuti durante la fuga (non si azzera)
+        self.flee_speed_boost = 0.0 # boost velocità dopo ogni colpo in fuga
+
+        # Idle naturale
+        self._idle_near_icon_t  = 0   # timer per commento vicino a icona
+        self._idle_wander_t     = 0   # countdown per prossimo waypoint
 
         # Esaurimento
         self._exhausted_rest_pos = None
@@ -546,16 +577,51 @@ class LupinBrain:
             self._transition(S.SLEEPING)
             return
 
-        # Vagabondaggio su tutto il virtual screen
-        if self.timer % 50 == 0:
-            self.tx = random.randint(self.vx_off + 30, self.vx_off + self.sw - 30)
-            self.ty = random.randint(self.vy_off + 30, self.vy_off + self.sh - 90)
+        # ── Vagabondaggio intelligente orientato alle icone ──
+        self._idle_wander_t -= 1
+        if self._idle_wander_t <= 0:
+            visible = {k: v for k, v in icons.items()
+                       if self.vx_off <= v[0] <= self.vx_off + self.sw
+                       and self.vy_off <= v[1] <= self.vy_off + self.sh - 80}
+            # 50% probabilità di scegliere un'icona come destinazione
+            if visible and random.random() < 0.50:
+                target_pos = random.choice(list(visible.values()))
+                # Offset casuale intorno all'icona (non ci va sopra di botto)
+                off_x = random.randint(-120, 120)
+                off_y = random.randint(-80, 40)
+                self.tx = max(self.vx_off + 30,
+                              min(self.vx_off + self.sw - 30, target_pos[0] + off_x))
+                self.ty = max(self.vy_off + 30,
+                              min(self.vy_off + self.sh - 90, target_pos[1] + off_y))
+            else:
+                # Punto casuale non troppo lontano dalla posizione attuale
+                max_step = 350
+                self.tx = max(self.vx_off + 30,
+                              min(self.vx_off + self.sw - 30,
+                                  int(self.x) + random.randint(-max_step, max_step)))
+                self.ty = max(self.vy_off + 30,
+                              min(self.vy_off + self.sh - 90,
+                                  int(self.y) + random.randint(-max_step // 2, max_step // 2)))
+            # Aspetta più a lungo se la destinazione è vicina
+            dist = math.hypot(self.tx - self.x, self.ty - self.y)
+            self._idle_wander_t = int(max(60, dist * 0.38))
 
-        self._move_smooth(self.tx, self.ty, 5, 0.28)
+        self._move_smooth(self.tx, self.ty, 5, 0.22)
 
         # Salto casuale durante il vagabondaggio
-        if not self.is_jumping and self.timer % 140 == 0 and random.random() < 0.4:
+        if not self.is_jumping and self.timer % 160 == 0 and random.random() < 0.35:
             self._jump(16)
+
+        # ── Nota un'icona vicina e la commenta ──
+        self._idle_near_icon_t = max(0, self._idle_near_icon_t - 1)
+        if self._idle_near_icon_t == 0:
+            near = [(k, v) for k, v in icons.items()
+                    if math.hypot(v[0] - self.x, v[1] - self.y) < 130
+                    and k not in self.stolen]
+            if near and random.random() < 0.004:
+                key = random.choice(["icon_notice", "icon_sniff"])
+                self.say(key)
+                self._idle_near_icon_t = random.randint(300, 600)
 
         # Micro-comportamenti idle: guarda in giro, stiracchia
         self.idle_look_timer += 1
@@ -571,7 +637,6 @@ class LupinBrain:
                     self.say("idle_look")
             else:
                 self.idle_micro = None
-        # Reset micro-behavior dopo un po'
         if self.idle_micro and self.idle_look_timer > 80:
             self.idle_micro = None
 
@@ -1016,19 +1081,27 @@ class LupinBrain:
         self.mood = "scared"
         dist = self._dist_cursor()
         flee_dist = {"aggressive": 280, "playful": 380, "sneaky": 480}[self.personality]
-        if dist < flee_dist:
-            self._flee_smart(13 if self.personality == "aggressive" else 11)
+        base_spd = 13 if self.personality == "aggressive" else 11
+        spd = min(base_spd + self.flee_speed_boost, 18)
+
+        if dist < flee_dist + self.flee_speed_boost * 20:
+            self._flee_smart(spd)
         else:
             if self.timer % 70 == 0:
                 self.tx = random.randint(80, self.sw - 80)
                 self.ty = random.randint(80, self.sh - 120)
-            self._move_smooth(self.tx, self.ty, 6, 0.28, wrap=True)
+            self._move_smooth(self.tx, self.ty, spd * 0.6, 0.28, wrap=True)
+
+        # Decay del boost velocità
+        if self.flee_speed_boost > 0:
+            self.flee_speed_boost = max(0.0, self.flee_speed_boost - 0.02)
 
         # Saltello di paura ogni tanto
         if not self.is_jumping and self.timer % 80 == 0 and random.random() < 0.5:
-            self._jump(16)
+            self._jump(int(14 + self.flee_speed_boost))
 
         # Dopo ~250 frame (4s) si stanca e si accascia
+        # (se ha preso molti colpi, già esausto prima)
         if self.timer > 250 and random.random() < 0.012:
             # Scegli posizione di riposo: icona desktop o centro-basso schermo
             visible_icons = {k: v for k, v in self._icons.items()
@@ -1083,6 +1156,8 @@ class LupinBrain:
         # Dopo ~400 frame si riprende
         if self.timer > random.randint(300, 500):
             self._exhausted_rest_pos = None
+            self.running_hits = 0
+            self.flee_speed_boost = 0.0
             self._jump(12)
             self._transition(S.IDLE)
 
@@ -1144,6 +1219,8 @@ class LupinBrain:
 
     def _surrender(self):
         self.mood = "sad"
+        self.running_hits = 0
+        self.flee_speed_boost = 0.0
         if self.timer > 80:
             self.hooks.restore_icons()
             self.stolen.clear()
@@ -1219,11 +1296,59 @@ class LupinBrain:
             self.hit_combo = 0
             return
 
-        # ── Resa se catturato mentre scappa ──────────────────
-        if self.state in (S.RUNNING, S.HIDING, S.TAUNTING, S.PRANK):
+        # ── Click durante la FUGA: reazione progressiva, non resa immediata ──
+        if self.state in (S.RUNNING, S.HIDING):
+            gap = self.global_timer - self.last_hit_timer
+            self.last_hit_timer = self.global_timer
+            if gap < 120:
+                self.hit_combo    += 1
+                self.running_hits += 1
+            else:
+                self.hit_combo    = 1
+                self.running_hits = max(self.running_hits, 1)
+
+            if self.running_hits == 1:
+                # Primo colpo: restituisce UNA icona rubata e se la prende
+                if self.stolen:
+                    idx = self.stolen[-1]
+                    orig = self.hooks._saved_positions.get(idx)
+                    if orig:
+                        self.hooks.set_icon_position(idx, *orig)
+                    self.stolen.remove(idx)
+                self.hit_reaction = self.say("running_hit_1")
+                self._jump(14)
+                self.flee_speed_boost = 1.5
+
+            elif self.running_hits <= 3:
+                # Colpi 2-3: impreca, corre più forte
+                self.hit_reaction = self.say("running_hit_2")
+                self._jump(18)
+                self.flee_speed_boost = min(3.0, self.flee_speed_boost + 1.0)
+
+            elif self.running_hits <= 5:
+                # Colpi 4-5: minaccia la polizia
+                self.hit_reaction = self.say("running_hit_3")
+                self._jump(22)
+                self.flee_speed_boost = min(4.5, self.flee_speed_boost + 1.0)
+
+            else:
+                # Colpi 6+: scappa disperatamente, mai si arrende finché non crolla
+                self.hit_reaction = self.say("running_hit_fast")
+                self._jump(26)
+                self.flee_speed_boost = 5.0
+                # Forza transizione a EXHAUSTED dopo troppi colpi
+                if self.running_hits >= 8:
+                    self._exhausted_rest_pos = (self.sw // 2, self.sh - 90)
+                    self.say("exhausted")
+                    self._transition(S.EXHAUSTED)
+            return
+
+        # ── Resa se cliccato mentre schernisce/prank ──────────
+        if self.state in (S.TAUNTING, S.PRANK):
             self.say("caught")
             self._transition(S.SURRENDER)
-            self.hit_combo = 0
+            self.hit_combo    = 0
+            self.running_hits = 0
             return
 
         # ── Click mentre esausto: insulti speciali, non riesce a scappare ──
@@ -1235,14 +1360,14 @@ class LupinBrain:
             else:
                 self.hit_combo = 1
             self.hit_reaction = self.say("hit_exhausted")
-            self._jump(max(4, 18 - self.timer // 60))  # salto debolissimo
-            # Dopo abbastanza colpi scappa comunque (con quel poco di energia rimasta)
+            self._jump(max(3, 14 - self.timer // 80))
             if self.hit_combo >= 4:
                 self._exhausted_rest_pos = None
+                self.running_hits = 0
                 self._transition(S.RUNNING)
             return
 
-        # ── Sistema colpi: click ravvicinati = combo ──────────
+        # ── Sistema colpi normali (stati FRIENDLY) ────────────
         gap = self.global_timer - self.last_hit_timer
         self.last_hit_timer = self.global_timer
 
@@ -1251,14 +1376,17 @@ class LupinBrain:
         else:
             self.hit_combo = 1
 
-        # Scala le reazioni in base al combo
         if self.hit_combo >= 5:
             self.hit_reaction = self.say("hit_escape")
             self._jump(26)
+            self.running_hits = 0
+            self.flee_speed_boost = 2.0
             self._transition(S.RUNNING)
         elif self.hit_combo >= 3:
             self.hit_reaction = self.say("hit_3")
             self._jump(22)
+            self.running_hits = 0
+            self.flee_speed_boost = 1.5
             if self.state not in (S.RUNNING, S.HIDING):
                 self._transition(S.RUNNING)
         elif self.hit_combo == 2:
