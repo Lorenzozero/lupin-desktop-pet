@@ -685,8 +685,8 @@ class PetWindow(QMainWindow):
             self._draw_sack(p, px, draw_y, nfo, t_global)
 
         # 5d. Volume trick: barra volume visiva
-        if nfo.get("is_volume_trick") and t > 30:
-            self._draw_volume_bar(p, nfo["volume_presses"], t)
+        if nfo.get("is_volume_trick") and t_global > 30:
+            self._draw_volume_bar(p, nfo["volume_presses"], t_global)
 
         # 6. Speech bubble
         if self.speech_scale > 0.05 and self.speech_text:
