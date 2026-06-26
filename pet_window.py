@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt, QTimer, QRect, QPoint, QRectF
 from PyQt5.QtGui import (
     QPainter, QColor, QFont, QBrush, QPen,
     QPainterPath, QPixmap, QCursor,
-    QRadialGradient, QLinearGradient,
+    QRadialGradient, QLinearGradient, QRegion,
 )
 
 from desktop_hooks import DesktopHooks
@@ -179,8 +179,9 @@ class PetWindow(QMainWindow):
 
         self._prev_hit_reaction = ""
         self._last_lclick_t  = 0
-        self._lbutton_down   = False   # edge detection sinistro
-        self._rbutton_down   = False   # edge detection destro
+        self._lbutton_down   = False
+        self._rbutton_down   = False
+        self._logf = None   # log diagnostico click disattivato
 
         self._icon_tick = 0
         self._loop_timer = QTimer()
@@ -192,34 +193,61 @@ class PetWindow(QMainWindow):
     # ── Win32 ────────────────────────────────────────────────
 
     def _set_passthrough(self, on=True):
-        """Sempre WS_EX_TRANSPARENT: il desktop e le app sotto non vengono mai bloccati.
-        I click su Lupin sono catturati dal WH_MOUSE_LL global hook."""
         hwnd = int(self.winId())
         ex = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-        ex |= win32con.WS_EX_TRANSPARENT | win32con.WS_EX_LAYERED
+        ex |= win32con.WS_EX_LAYERED
+        if on:
+            ex |= win32con.WS_EX_TRANSPARENT
+        else:
+            ex &= ~win32con.WS_EX_TRANSPARENT
         win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, ex)
+
+    def _log(self, msg):
+        if not self._logf:
+            return
+        try:
+            with open(self._logf, "a", encoding="utf-8") as f:
+                f.write(msg + "\n")
+        except Exception:
+            pass
 
     # ── Main loop ────────────────────────────────────────────
 
     def _loop(self):
         try:
-            # ── Click sinistro: edge hi→lo su bit 15 (sempre affidabile) ──
+            nfo = self.brain.info
+            px, py = nfo["x"], nfo["y"]
+            # Posizione di Lupin in coordinate SCHERMO (gestisce offset monitor + DPI):
+            # il painter disegna a (px, py-40) window-local → mapToGlobal converte.
+            lupin_screen = self.mapToGlobal(QPoint(int(px), int(py - 40)))
+            lsx, lsy = lupin_screen.x(), lupin_screen.y()
+            # Cursore nello stesso sistema di coordinate Qt:
+            cpos = QCursor.pos()
+            mx, my = cpos.x(), cpos.y()
+            in_box = abs(mx - lsx) <= 115 and abs(my - lsy) <= 135
+            # Cursore in coordinate window-local (per piazzare le particelle)
+            lp = self.mapFromGlobal(cpos)
+            lmx, lmy = lp.x(), lp.y()
+
+            # ── Click sinistro: edge detection su bit 15 (globale) ──
             ldown = bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
             if ldown and not self._lbutton_down:
-                mx, my = win32api.GetCursorPos()
-                now = self.brain.global_timer
-                if now - self._last_lclick_t < 30:
-                    self._handle_double_click(mx, my)
-                else:
-                    self._handle_global_click(mx, my)
-                self._last_lclick_t = now
+                self._log(f"LCLICK cursor=({mx},{my}) lupin_screen=({lsx},{lsy}) "
+                          f"dx={mx-lsx} dy={my-lsy} in_box={in_box}")
+                if in_box:
+                    now = self.brain.global_timer
+                    if now - self._last_lclick_t < 30:
+                        self._handle_double_click(lmx, lmy)
+                    else:
+                        self._do_hit(lmx, lmy)
+                    self._last_lclick_t = now
             self._lbutton_down = ldown
 
-            # ── Click destro: petting ──────────────────────────
+            # ── Click destro: petting ──
             rdown = bool(ctypes.windll.user32.GetAsyncKeyState(0x02) & 0x8000)
             if rdown and not self._rbutton_down:
-                mx, my = win32api.GetCursorPos()
-                self._handle_right_click(mx, my)
+                if in_box:
+                    self._handle_right_click(lmx, lmy)
             self._rbutton_down = rdown
         except Exception:
             import traceback; traceback.print_exc()
@@ -555,23 +583,22 @@ class PetWindow(QMainWindow):
         p.setBrush(QBrush(shadow));  p.setPen(Qt.NoPen)
         p.drawEllipse(int(px - sh_r * 1.4), int(sh_y) - 6, int(sh_r * 2.8), 14)
 
-        # 4. Lupin character
+        # 4. Lupin character — con wrap-around Pac-Man: vicino a un bordo
+        #    viene disegnata anche la copia "fantasma" sul lato opposto.
         draw_y = py + jz
-
-        p.save()
-        ox, oy = self.shake_off
-        p.translate(px + ox, draw_y + oy)
-        p.rotate(self.body_rot)
-
-        if nfo["is_hiding"]:
-            peek_w = SIZE // 3
-            if nfo["peek_side"] == "right":
-                p.setClipRect(QRect(SIZE//2 - peek_w, -SIZE, peek_w, SIZE * 2))
-            else:
-                p.setClipRect(QRect(-SIZE//2, -SIZE, peek_w, SIZE * 2))
-
-        self._draw_lupin(p, nfo, t_global)
-        p.restore()
+        offsets = [(0, 0)]
+        if px < SIZE:
+            offsets.append((self.sw, 0))
+        elif px > self.sw - SIZE:
+            offsets.append((-self.sw, 0))
+        if draw_y < SIZE:
+            offsets.append((0, self.sh))
+        elif draw_y > self.sh - SIZE:
+            offsets.append((0, -self.sh))
+        if len(offsets) == 3:   # vicino a un angolo → copia anche in diagonale
+            offsets.append((offsets[1][0], offsets[2][1]))
+        for dox, doy in offsets:
+            self._draw_lupin_at(p, nfo, t_global, px + dox, draw_y + doy)
 
         # 5a. Icona trasportata (carrying) – replica visiva sopra la testa
         if nfo.get("is_carrying") and nfo.get("carry_icon_pos"):
@@ -695,6 +722,22 @@ class PetWindow(QMainWindow):
         p.end()
 
     # ── Lupin character drawing ───────────────────────────────
+
+    def _draw_lupin_at(self, p, nfo, t, cx, cy):
+        """Disegna Lupin centrato in (cx, cy) — usato sia per la posizione
+        reale sia per le copie 'fantasma' del wrap-around."""
+        p.save()
+        ox, oy = self.shake_off
+        p.translate(cx + ox, cy + oy)
+        p.rotate(self.body_rot)
+        if nfo["is_hiding"]:
+            peek_w = SIZE // 3
+            if nfo["peek_side"] == "right":
+                p.setClipRect(QRect(SIZE//2 - peek_w, -SIZE, peek_w, SIZE * 2))
+            else:
+                p.setClipRect(QRect(-SIZE//2, -SIZE, peek_w, SIZE * 2))
+        self._draw_lupin(p, nfo, t)
+        p.restore()
 
     def _draw_lupin(self, p, nfo, t):
         state  = nfo["state"]
@@ -1482,8 +1525,6 @@ class PetWindow(QMainWindow):
         """Doppio click vicino a Lupin: reazione drammatica."""
         nfo = self.brain.info
         px, py = nfo["x"], nfo["y"]
-        if abs(mx - px) > 90 or abs(my - (py - 40)) > 110:
-            return
         self.brain.hit_combo = max(self.brain.hit_combo, 2)
         self.brain.on_click()
         joke = self.brain.say("double_click")
@@ -1500,8 +1541,6 @@ class PetWindow(QMainWindow):
         """Click destro vicino a Lupin: lo si accarezza."""
         nfo = self.brain.info
         px, py = nfo["x"], nfo["y"]
-        if abs(mx - px) > 90 or abs(my - (py - 40)) > 110:
-            return
         joke = self.brain.say("pet")
         self._say(joke, 200)
         self.brain.mood = "happy"
@@ -1513,16 +1552,20 @@ class PetWindow(QMainWindow):
                 random.uniform(-1, 1), random.uniform(-2, -0.5), "sparkle"))
 
     def mousePressEvent(self, e):
-        if e.button() != Qt.LeftButton:
-            return
-        # Il click Qt arriva solo quando la finestra è in cima;
-        # in quel caso lo gestiamo comunque (fall-through sicuro).
         nfo = self.brain.info
         px, py = nfo["x"], nfo["y"]
         mx, my = e.x() + self._vx, e.y() + self._vy
-        if abs(mx - px) > 90 or abs(my - (py - 40)) > 110:
+        if abs(mx - px) > 115 or abs(my - (py - 40)) > 135:
             return
-        self._do_hit(mx, my)
+        if e.button() == Qt.RightButton:
+            self._handle_right_click(mx, my)
+        elif e.button() == Qt.LeftButton:
+            now = self.brain.global_timer
+            if now - self._last_lclick_t < 30:
+                self._handle_double_click(mx, my)
+            else:
+                self._do_hit(mx, my)
+            self._last_lclick_t = now
 
     def _do_hit(self, mx, my):
         """Logica colpo: particelle + speech bubble."""

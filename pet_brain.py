@@ -288,10 +288,16 @@ class LupinBrain:
 
     def __init__(self, sw, sh, hooks, vx=0, vy=0):
         self.sw, self.sh = sw, sh
-        self.vx_off = vx   # offset origine virtual screen (per dual monitor)
-        self.vy_off = vy
+        # Coordinate LOCALI alla finestra [0, sw]×[0, sh] (la finestra copre tutto
+        # il virtual screen → questo range = tutti i monitor disponibili).
+        self.vx_off = 0
+        self.vy_off = 0
+        # Offset SCHERMO reale (origine virtual screen): serve solo a convertire
+        # GetCursorPos (coordinate schermo) in coordinate locali.
+        self._scr_vx = vx
+        self._scr_vy = vy
         self.hooks = hooks
-        self.x, self.y = vx + sw // 2, vy + sh // 2
+        self.x, self.y = sw // 2, sh // 2
         self.tx, self.ty = self.x, self.y
         self.vx, self.vy = 0.0, 0.0
         self.state = S.WAVING
@@ -307,7 +313,8 @@ class LupinBrain:
         self.personality = random.choice(["aggressive", "playful", "sneaky"])
 
         # Cursor idle tracking — soglia alta: 40 secondi a ~60fps
-        self.last_cursor = win32api.GetCursorPos()
+        self.last_cursor = (win32api.GetCursorPos()[0] - vx,
+                            win32api.GetCursorPos()[1] - vy)
         self.cursor_idle_frames = 0
 
         self.mood = "happy"
@@ -332,6 +339,7 @@ class LupinBrain:
         # Pushing
         self.push_icon_idx = None
         self.push_dir = (1.0, 0.0)
+        self._steal_push_dir = (1.0, 0.0)   # direzione spinta durante il furto
 
         # Carrying
         self.carry_icon_idx  = None
@@ -396,7 +404,12 @@ class LupinBrain:
     # ── helpers movimento ────────────────────────────────────
 
     def _cursor(self):
-        return win32api.GetCursorPos()
+        # GetCursorPos restituisce coordinate SCHERMO; self.x/self.y sono
+        # window-local (il painter disegna senza sottrarre l'offset). Converto
+        # sottraendo l'origine del virtual screen così cursore e Lupin
+        # sono nello stesso sistema di coordinate.
+        cx, cy = win32api.GetCursorPos()
+        return cx - self._scr_vx, cy - self._scr_vy
 
     def _dist_cursor(self):
         cx, cy = self._cursor()
@@ -429,21 +442,23 @@ class LupinBrain:
         cx, cy = self._cursor()
         dx, dy = self.x - cx, self.y - cy
         d = math.hypot(dx, dy) or 1
-        perp = math.sin(self.timer * 0.22) * 4
-        self.vx += (dx / d * spd - dy / d * perp - self.vx) * 0.38
-        self.vy += (dy / d * spd + dx / d * perp - self.vy) * 0.38
+        # Componente perpendicular più forte per zigzagare
+        perp = math.sin(self.timer * 0.30) * 7
+        self.vx += (dx / d * spd - dy / d * perp - self.vx) * 0.50
+        self.vy += (dy / d * spd + dx / d * perp - self.vy) * 0.50
         spd_now = math.hypot(self.vx, self.vy)
         if spd_now > spd:
             self.vx = self.vx / spd_now * spd
             self.vy = self.vy / spd_now * spd
         self.x += self.vx
         self.y += self.vy
-        # Wrap ai bordi durante la fuga
+        # Wrap-around Pac-Man durante la fuga (su tutti i monitor)
         self._wrap_position()
         self.direction = 1 if self.vx > 0 else -1
 
     def _wrap_position(self):
-        """Esce da un lato e rientra dall'altro (dual-monitor aware)."""
+        """Wrap-around stile Pac-Man su tutti i bordi del virtual screen
+        (tutti i monitor): esce da un lato/alto e rientra dall'opposto."""
         self.just_wrapped = False
         left  = self.vx_off - 30
         right = self.vx_off + self.sw + 30
@@ -453,14 +468,22 @@ class LupinBrain:
         elif self.x > right:
             self.x = left + 50
             self.just_wrapped = True
-        floor = self.vy_off + self.sh + 10 if self.state == S.EXHAUSTED else self.vy_off + self.sh - 80
-        top   = self.vy_off + 40
+        # Wrap verticale (esce dall'alto → rientra dal basso e viceversa).
+        # In EXHAUSTED resta a terra (niente wrap verticale).
+        if self.state == S.EXHAUSTED:
+            floor = self.vy_off + self.sh - 80
+            if self.y > floor:
+                self.y = floor
+                self.vy = -abs(self.vy) * 0.5
+            return
+        top    = self.vy_off - 30
+        bottom = self.vy_off + self.sh + 30
         if self.y < top:
-            self.y = top
-            self.vy = abs(self.vy) * 0.5
-        elif self.y > floor:
-            self.y = floor
-            self.vy = -abs(self.vy) * 0.5
+            self.y = bottom - 50
+            self.just_wrapped = True
+        elif self.y > bottom:
+            self.y = top + 50
+            self.just_wrapped = True
 
     def _jump(self, force=18):
         if not self.is_jumping:
@@ -642,8 +665,26 @@ class LupinBrain:
 
         dist = self._dist_cursor()
 
-        # Curiosità verso il cursore
-        if dist < 200 and self.timer > 40 and random.random() < 0.015:
+        # Fuga immediata se il cursore è troppo vicino
+        if dist < 85 and self.timer > 30:
+            self.flee_speed_boost = 2.0
+            self.running_hits = 0
+            self._jump(14)
+            self._transition(S.RUNNING)
+            return
+
+        # Evita il cursore quando si avvicina (120–180px)
+        if dist < 180 and self.timer > 20:
+            cx, cy = self._cursor()
+            # Sposta la destinazione nella direzione opposta al cursore
+            away_x = int(self.x + (self.x - cx) * 0.9)
+            away_y = int(self.y + (self.y - cy) * 0.9)
+            self.tx = max(self.vx_off + 40, min(self.vx_off + self.sw - 40, away_x))
+            self.ty = max(self.vy_off + 40, min(self.vy_off + self.sh - 100, away_y))
+            self._idle_wander_t = 40
+
+        # Curiosità verso il cursore (solo se non troppo vicino)
+        elif dist < 200 and self.timer > 40 and random.random() < 0.015:
             self._transition(S.CURIOUS)
             return
 
@@ -905,7 +946,7 @@ class LupinBrain:
 
         # Aggiorna solo la posizione fake per il rendering — l'icona reale è off-screen
         head_x = max(50, min(self.sw - 50, int(self.x)))
-        head_y = max(50, min(self.sh - 80, int(self.y) - 85))
+        head_y = max(50, min(self.sh - 80, int(self.y) - 130))
         self.carry_icon_pos = (head_x, head_y)
 
         # Cammina in giro
@@ -1045,14 +1086,45 @@ class LupinBrain:
 
     def _stealing(self, icons=None):
         self.mood = "excited"
-        if self.timer == 25:
-            self.hooks.steal_icon(self.target_icon)
-            self.stolen.append(self.target_icon)
+        all_pos = self.hooks.get_all_positions()
+        ipos = all_pos.get(self.target_icon)
+
+        # ── Fase 1 (timer 1-70): si appoggia dietro l'icona e la spinge fisicamente ──
+        if self.timer <= 70 and ipos:
+            ix, iy = ipos
+            if self.timer == 1:
+                # Direzione di spinta: trascina l'icona verso il centro schermo
+                cx, cy = self.sw // 2, self.sh // 2
+                dx, dy = cx - ix, cy - iy
+                d = math.hypot(dx, dy) or 1
+                self._steal_push_dir = (dx / d, dy / d)
+                self.carry_icon_name = self.hooks.get_icon_name(self.target_icon)
+            pdx, pdy = self._steal_push_dir
+            self.push_dir = (pdx, pdy)
+            # Lupin si mette dietro l'icona, nella direzione opposta alla spinta
+            self._move_smooth(ix - pdx * 48, iy - pdy * 22, 8, 0.42)
+            self.direction = 1 if pdx > 0 else -1
+            # Spinge l'icona reale (scivola sul desktop) dopo essersi appoggiato
+            if self.timer > 16 and self.timer % 2 == 0:
+                speed = 3.5
+                nix = max(60, min(self.sw - 60, ix + pdx * speed))
+                niy = max(60, min(self.sh - 70, iy + pdy * speed))
+                self.hooks.set_icon_position(self.target_icon, int(nix), int(niy))
+            return
+
+        # ── Fase 2 (timer 71): afferra — nasconde l'icona e la mette sopra la testa ──
+        if self.timer == 71:
+            self.hooks.set_icon_position(self.target_icon, -300, -300)
+            self.carry_icon_idx  = self.target_icon
+            if not self.carry_icon_name:
+                self.carry_icon_name = self.hooks.get_icon_name(self.target_icon)
+            if self.target_icon not in self.stolen:
+                self.stolen.append(self.target_icon)
             self.total_steals += 1
             self._last_steal_global = self.global_timer
             self._auto_restore_said = False
-            self._jump(14)
-        if self.timer > 50:
+            self._jump(16)
+        if self.timer > 95:
             if len(self.stolen) < self.MAX_STEAL:
                 all_pos = self.hooks.get_all_positions()
                 remaining = {k: v for k, v in all_pos.items()
@@ -1071,18 +1143,24 @@ class LupinBrain:
     def _taunting(self):
         self.mood = "smug"
         self._move_smooth(self.tx, self.ty, 6, 0.3)
+        # Aggiorna posizione replica icona sopra la testa durante il taunt
+        head_x = max(50, min(self.sw - 50, int(self.x)))
+        head_y = max(50, min(self.sh - 80, int(self.y) - 130))
+        self.carry_icon_pos = (head_x, head_y)
         # Saltello di scherno
         if self.timer == 30:
             self._jump(18)
         if self.timer > 240:
+            self.carry_icon_idx  = None
+            self.carry_icon_name = ""
             self._transition(S.RUNNING)
 
     def _running(self):
         self.mood = "scared"
         dist = self._dist_cursor()
         flee_dist = {"aggressive": 280, "playful": 380, "sneaky": 480}[self.personality]
-        base_spd = 13 if self.personality == "aggressive" else 11
-        spd = min(base_spd + self.flee_speed_boost, 18)
+        base_spd = 16 if self.personality == "aggressive" else 14
+        spd = min(base_spd + self.flee_speed_boost, 24)
 
         if dist < flee_dist + self.flee_speed_boost * 20:
             self._flee_smart(spd)
@@ -1090,6 +1168,7 @@ class LupinBrain:
             if self.timer % 70 == 0:
                 self.tx = random.randint(80, self.sw - 80)
                 self.ty = random.randint(80, self.sh - 120)
+            # Wrap-around Pac-Man su tutti i monitor
             self._move_smooth(self.tx, self.ty, spd * 0.6, 0.28, wrap=True)
 
         # Decay del boost velocità
@@ -1224,6 +1303,8 @@ class LupinBrain:
         if self.timer > 80:
             self.hooks.restore_icons()
             self.stolen.clear()
+            self.carry_icon_idx  = None
+            self.carry_icon_name = ""
             self.times_caught += 1
             self.steal_cooldown = 400
             self.say("celebrating")
@@ -1425,8 +1506,9 @@ class LupinBrain:
             is_curious=self.state == S.CURIOUS,
             is_following=self.state == S.FOLLOWING,
             is_hanging=self.state == S.HANGING,
-            is_pushing=self.state == S.PUSHING,
-            is_carrying=self.state == S.CARRYING,
+            is_pushing=self.state == S.PUSHING
+                       or (self.state == S.STEALING and self.timer <= 70),
+            is_carrying=self.state in (S.CARRYING, S.TAUNTING) and self.carry_icon_idx is not None,
             is_sitting=self.state == S.SITTING,
             carry_icon_pos=self.carry_icon_pos,
             carry_icon_name=self.carry_icon_name,

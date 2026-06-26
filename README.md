@@ -33,8 +33,9 @@ pythonw main.py
 |---|---|
 | **Movimento smart** | Si orienta verso le icone del desktop — 50% probabilità di sceglierle come meta |
 | **Salto con gravità** | `jump_z` + `jump_vel`, gravità 1.4/frame |
-| **Wrap-around schermo** | Esce da un lato, rientra dall'altro |
-| **Dual monitor** | Schermo virtuale Win32 — si muove su tutti i monitor |
+| **Wrap-around Pac-Man** | Esce da **qualsiasi** bordo (sinistra/destra **e** alto/basso) e rientra dall'opposto — copie "fantasma" ai bordi così non si vede mai mezzo personaggio |
+| **Multi-monitor reale** | Si muove su **tutti** i monitor disponibili (virtual screen Win32); coordinate locali `[0, sw]×[0, sh]` allineate alle icone del desktop |
+| **Evita il cursore** | In IDLE si allontana se il mouse si avvicina (<180px) e scappa di scatto se troppo vicino (<85px) |
 | **Schiacciamento** | Corpo si deforma durante la corsa |
 | **Body rotation** | Rotazione durante la corsa veloce |
 | **Boost velocità** | Ogni colpo ricevuto in fuga lo fa accelerare |
@@ -59,7 +60,7 @@ pythonw main.py
 | `VOLUME_TRICK` | Alza il volume del PC con animazione + barra visiva |
 | `PHONE` | Chiama i complici (Jigen/Goemon/Fujiko) — telefono disegnato, conversazione a bolle |
 | `APPROACHING` | Corre verso un'icona con maschera da ladro |
-| `STEALING` | Ruba l'icona (Win32 LVM32) — esce da un buco nero |
+| `STEALING` | Si appoggia **dietro** l'icona e la **spinge fisicamente** sul desktop (icona reale che scivola), poi la afferra: sparisce e va sopra la testa col **titolo reale** |
 | `TAUNTING` | Si prende gioco di te con refurtiva orbitante 👑💎🏅 |
 | `RUNNING` | Fuga con wrap-around, gocce di sudore, velocità crescente se colpito |
 | `HIDING` | Si nasconde dietro finestre aperte |
@@ -71,7 +72,7 @@ pythonw main.py
 | Feature | Dettaglio |
 |---|---|
 | **Furto icone** | `LVM_SETITEMPOSITION32` via `WriteProcessMemory` (32-bit safe) |
-| **Nome icona** | `LVM_GETITEMTEXT` via `ReadProcessMemory` — legge il titolo reale |
+| **Nome icona** | `LVM_GETITEMTEXTW` (Unicode) via `ReadProcessMemory` — legge il titolo reale dell'oggetto |
 | **Icona nascosta** | Durante CARRYING la vera icona è off-screen: si vede solo la replica |
 | **Auto-arrange off** | Disabilita `LVS_AUTOARRANGE` all'avvio |
 | **Spinta fisica** | Muove icona 2.5px/frame, rimbalza sui bordi |
@@ -117,7 +118,7 @@ Lupin **non si arrende mai** durante la fuga — reagisce progressivamente e acc
 | 6°–7° | *"Sono già sparito! 💨"* · velocità massima (18px/frame) |
 | 8°+ | Crolla esausto — non ce la fa più fisicamente |
 
-> **Click detection**: `GetAsyncKeyState(VK_LBUTTON)` bit 0 (was-pressed) — nessun hook globale, nessun blocco del mouse. Raggio: ±75px orizzontale, ±100px verticale dal centro Lupin.
+> **Click detection**: `GetAsyncKeyState(VK_LBUTTON/RBUTTON)` bit 15 con edge-detection — nessun hook globale, nessun blocco del mouse. La posizione di Lupin è convertita in coordinate schermo con `mapToGlobal` e confrontata con `QCursor.pos()` (stesso sistema di coordinate Qt → corretto anche con monitor a sinistra/offset negativi e DPI). Raggio: ±115px orizzontale, ±135px verticale.
 
 ### Comportamenti Temporali
 | Ora | Comportamento |
