@@ -2,201 +2,84 @@
 
 > *"Se mi prendi ti ridò il tuo desktop esattamente com'era!"*
 
-Un desktop pet **Lupin III** disegnato proceduralmente che vive sul tuo schermo Windows, ruba le icone, fa dispetti, beve birre e insulta in italiano satirico quando lo colpisci.
+<p align="center">
+  <img src="assets/demo.gif" alt="Lupin ruba le icone del desktop" width="640">
+</p>
+
+Lupin III vive sul tuo desktop. Cammina tra i monitor, **ruba davvero le icone**
+spingendole via e portandole sopra la testa, fa telefonate ai complici, beve
+birre, balla, dorme — e se provi a cliccarlo scappa impaurito **insultandoti in
+italiano**. Non si arrende mai durante la fuga: più lo colpisci, più corre forte
+e più si arrabbia, finché non chiama la polizia o crolla esausto.
+
+È disegnato **interamente a codice** (nessuno sprite): ogni capello, la giacca
+rossa, il cappello con la fascetta, le animazioni di corsa e le pose sono
+generate frame per frame con `QPainter`. Gira come overlay trasparente a tutto
+schermo su Windows, senza mai rubarti i click sul desktop sotto.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-lightgrey.svg)
+![Platform](https://img.shields.io/badge/Windows-10%2F11-lightgrey.svg)
 ![PyQt5](https://img.shields.io/badge/UI-PyQt5-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
 
-## 🚀 Avvio rapido
+## 🚀 Avvio
 
 ```bash
 pip install PyQt5 pywin32 pygame-ce
-
-# Avvio silenzioso (no finestra CMD):
-start launch.vbs
-# Oppure direttamente:
-pythonw main.py
+start launch.vbs      # avvio silenzioso (no finestra CMD)
+# oppure:  pythonw main.py
 ```
 
-**ESC** per chiudere e ripristinare tutte le icone.
+Premi **ESC** per chiudere e rimettere tutte le icone al loro posto.
 
 ---
 
-## 🎮 Funzionalità
+## 🎮 Cosa fa
 
-### Movimento & Fisica
-| Feature | Dettaglio |
-|---|---|
-| **Movimento smart** | Si orienta verso le icone del desktop — 50% probabilità di sceglierle come meta |
-| **Salto con gravità** | `jump_z` + `jump_vel`, gravità 1.4/frame |
-| **Wrap-around Pac-Man** | Esce da **qualsiasi** bordo (sinistra/destra **e** alto/basso) e rientra dall'opposto — copie "fantasma" ai bordi così non si vede mai mezzo personaggio |
-| **Multi-monitor reale** | Si muove su **tutti** i monitor disponibili (virtual screen Win32); coordinate locali `[0, sw]×[0, sh]` allineate alle icone del desktop |
-| **Evita il cursore** | In IDLE si allontana se il mouse si avvicina (<180px) e scappa di scatto se troppo vicino (<85px) |
-| **Schiacciamento** | Corpo si deforma durante la corsa |
-| **Body rotation** | Rotazione durante la corsa veloce |
-| **Boost velocità** | Ogni colpo ricevuto in fuga lo fa accelerare |
+**Ruba le icone sul serio.** Si avvicina con la maschera da ladro, si appoggia
+dietro un'icona e la **spinge fisicamente** sul desktop (la vedi scivolare via),
+poi la afferra: l'icona sparisce e ne compare una replica sopra la sua testa, col
+**titolo reale** dell'oggetto. Tutto via Win32 (`LVM_SETITEMPOSITION32`,
+`LVM_GETITEMTEXTW`). Quando lo catturi, rimette ogni cosa esattamente dov'era.
 
-### Stati & Comportamenti (24 stati)
-| Stato | Descrizione |
-|---|---|
-| `IDLE` | Vaga notando le icone vicine, le commenta, salta occasionalmente |
-| `SLEEPING` | Si addormenta dopo 40s (20s di notte) — dondola lentamente mentre sogna |
-| `CURIOUS` | Si avvicina al cursore, si spaventa se troppo vicino |
-| `FOLLOWING` | Segue il cursore saltellando |
-| `WAVING` | Saluta con animazione braccio + cuori |
-| `DANCING` | Balla con saltelli ritmici e note musicali |
-| `HANGING` | Si appende a un'icona del desktop |
-| `PUSHING` | Spinge fisicamente un'icona attraverso il desktop |
-| `CARRYING` | Porta un'icona sopra la testa — la originale sparisce, replica visiva animata |
-| `SITTING` | Si siede su un'icona e chiacchiera |
-| `LEANING` | Si appoggia al bordo schermo — appare un lampione procedurale |
-| `CORNER` | Si nasconde in un angolo con braccia conserte |
-| `EXHAUSTED` | Si accascia dopo una lunga fuga, ansima con fiatone |
-| `DRINKING` | Beve una birra 🍺, testa che si inclina, poi rutta |
-| `VOLUME_TRICK` | Alza il volume del PC con animazione + barra visiva |
-| `PHONE` | Chiama i complici (Jigen/Goemon/Fujiko) — telefono disegnato, conversazione a bolle |
-| `APPROACHING` | Corre verso un'icona con maschera da ladro |
-| `STEALING` | Si appoggia **dietro** l'icona e la **spinge fisicamente** sul desktop (icona reale che scivola), poi la afferra: sparisce e va sopra la testa col **titolo reale** |
-| `TAUNTING` | Si prende gioco di te con refurtiva orbitante 👑💎🏅 |
-| `RUNNING` | Fuga con wrap-around, gocce di sudore, velocità crescente se colpito |
-| `HIDING` | Si nasconde dietro finestre aperte |
-| `SURRENDER` | Si arrende solo se cliccato durante TAUNTING — mai durante la fuga |
-| `CELEBRATING` | Festeggia con coriandoli e cuori |
-| `PRANK` | Dispetto: icone a cerchio o caos totale |
+**Reagisce ai tuoi click.** Avvicini il mouse e si allontana; ti avvicini troppo
+e scatta in fuga. Se riesci a colpirlo parte l'escalation di insulti — *"Ehi
+STRONZO!"* → *"BASTARDO, smettila!"* → *"CHIAMO LA POLIZIA! 113!"* — e durante la
+fuga accelera a ogni colpo invece di fermarsi. Click destro per accarezzarlo
+(cuori e imbarazzo), doppio click per una reazione drammatica.
 
-### Interazione con Desktop (Win32)
-| Feature | Dettaglio |
-|---|---|
-| **Furto icone** | `LVM_SETITEMPOSITION32` via `WriteProcessMemory` (32-bit safe) |
-| **Nome icona** | `LVM_GETITEMTEXTW` (Unicode) via `ReadProcessMemory` — legge il titolo reale dell'oggetto |
-| **Icona nascosta** | Durante CARRYING la vera icona è off-screen: si vede solo la replica |
-| **Auto-arrange off** | Disabilita `LVS_AUTOARRANGE` all'avvio |
-| **Spinta fisica** | Muove icona 2.5px/frame, rimbalza sui bordi |
-| **Trasporto in testa** | Replica visiva sopra la testa con nome reale + emoji tipo |
-| **Click → ripristino** | Clicca Lupin mentre trasporta → "scusa!" + icona torna al posto |
-| **Auto-ripristino** | Dopo 2 minuti: "Per stavolta sistemo io…" + ripristino |
-| **Scatter cerchio** | Icone disposte in ellisse attorno al centro |
-| **Scatter caos** | Icone in posizioni casuali visibili |
-| **Portale buco nero** | Animazione vortice viola all'entrata/uscita del ladro |
+**Vive di vita sua.** Ha 24 stati e una personalità casuale (aggressivo /
+giocherellone / furtivo) che cambia quanto è avido e quanto scappa lontano. Vaga
+notando le icone, dorme se lo lasci in pace (prima di notte), telefona ai
+complici, balla, beve birre a pranzo, e commenta l'ora con battute a tema.
 
-### Icona Trasportata
-| Feature | Dettaglio |
-|---|---|
-| **Nome reale** | Titolo letto da Explorer (`LVM_GETITEMTEXT`) mostrato in pill scura |
-| **Emoji adattiva** | 📁 cartella / 🐍 Python / 🌐 browser / 🎮 giochi / ⚙️ .exe / 🗑️ cestino… |
-| **Alone pulsante** | Glow dorato animato con oscillazione sinusoidale |
-| **Nascosta durante carrying** | L'originale va a -300,-300; al rilascio torna alla posizione salvata |
-
-### Interazione Mouse
-| Click | Effetto |
-|---|---|
-| **Clic sinistro su Lupin** | Pugno + particelle + insulto (escalation combo) |
-| **Doppio click su Lupin** | Reazione drammatica potenziata + flash schermo |
-| **Clic destro su Lupin** | Lupin viene accarezzato — cuori, scintille, reazione imbarazzata |
-
-### Sistema Colpi — Stato Normale
-| Combo | Reazione + Particelle |
-|---|---|
-| ×1 | 💢 pugno + 😮 + stelle + *"Ow! Che maleducato! 😤"* |
-| ×2 | 💥 pugno grande + 😠 + scintille + *"BASTARDO! Non colpirmi! 😡"* |
-| ×3 | 🤛 + 😡 + onde d'urto + shake + *"Chiamo i Carabinieri! 🚔"* → scappa |
-| ×5+ | 💥 + 💀 + flash schermo + *"Ti denuncio a 8 tribunali!"* |
-| Esausto | *"VIGLIACCO! Colpisci un esausto!"* — salto debolissimo |
-
-### Sistema Colpi — Durante la Fuga
-Lupin **non si arrende mai** durante la fuga — reagisce progressivamente e accelera:
-
-| Colpo | Reazione |
-|---|---|
-| 1° | Restituisce **una** icona rubata · *"Ok ok LA RIDÒ! Ricordati la mia faccia! 😤"* |
-| 2°–3° | Impreca · *"BASTARDO! Smettila! 💢"* · velocità +1.0 |
-| 4°–5° | *"CHIAMO LA POLIZIA! 113! 📞"* · velocità +3.0 |
-| 6°–7° | *"Sono già sparito! 💨"* · velocità massima (18px/frame) |
-| 8°+ | Crolla esausto — non ce la fa più fisicamente |
-
-> **Click detection**: `GetAsyncKeyState(VK_LBUTTON/RBUTTON)` bit 15 con edge-detection — nessun hook globale, nessun blocco del mouse. La posizione di Lupin è convertita in coordinate schermo con `mapToGlobal` e confrontata con `QCursor.pos()` (stesso sistema di coordinate Qt → corretto anche con monitor a sinistra/offset negativi e DPI). Raggio: ±115px orizzontale, ±135px verticale.
-
-### Comportamenti Temporali
-| Ora | Comportamento |
-|---|---|
-| **23:00 – 06:00** | Si addormenta dopo 20s (invece di 40s), telefonate più frequenti |
-| **12:00 – 14:00** | Beve più birre (pausa pranzo) |
-| **Ogni 8–12 minuti** | Commenta l'ora con battute tematiche (mattina/pranzo/sera/notte) |
-
-### Effetti Visivi
-| Feature | Dettaglio |
-|---|---|
-| **Particelle** | 10 tipi: sparkle, smoke, heart, note, zzz, confetti, star, sweat, dust, emoji_pain |
-| **Lampione procedurale** | Palo metallico + braccio curvo + lanterna pulsante in LEANING su bordo schermo |
-| **Telefono disegnato** | Braccio alzato + rettangolo nero con schermo blu in stato PHONE |
-| **Maschera da ladro** | Striscia nera in APPROACHING/STEALING |
-| **Refurtiva orbitante** | 👑💎🏅✨🪙💍 con alone dorato |
-| **Barra volume** | HUD animato verde→giallo→rosso + 🔊 |
-| **Toast notifications** | Slide-in da destra con countdown |
-| **Speech bubble** | Bolla con scale-in, drop shadow, bordo scuro, font emoji |
-| **Screen shake** | Intensità proporzionale al combo colpi |
-| **Trail corsa** | Scia ellissoidale semi-trasparente |
-| **Shadow dinamica** | Si rimpicciolisce con l'altezza del salto |
-| **Portale buco nero** | Vortice viola con scintille orbitanti |
-
-### Animazioni Corpo
-| Parte | Animazione |
-|---|---|
-| **Testa** | Bob sinusoidale + respirazione + tilt mentre beve |
-| **Occhi** | Tracking cursore con pupille, blink casuale |
-| **Bocca** | Sorriso, O-sorpresa, smorfia, ansimante, linguaccia animata |
-| **Maschera** | Striscia nera da ladro in APPROACHING/STEALING |
-| **Braccia** | Pose per ogni stato: saluto, ballo, trasporto, spinta, appoggio, birra, telefono |
-| **Gambe** | Corsa alternata, seduto disteso, accasciato esausto |
-| **Guance** | Rossore per stati felici/eccitati |
-| **Cappello** | Lupin III con tesa, corpo e fascetta rossa |
-
-### Personalità
-| Tipo | Aggressività | Distanza fuga | Avidità |
-|---|---|---|---|
-| 😤 Aggressive | Alta | 280px | 85% |
-| 🎮 Playful | Media | 380px | 65% |
-| 🥷 Sneaky | Bassa | 480px | 45% |
-
-### Audio
-| Feature | Dettaglio |
-|---|---|
-| **pygame-ce** | Community edition, pre-built per Python 3.14 |
-| **Suoni facoltativi** | Graceful fallback se pygame non disponibile |
+**Gira su tutti i monitor.** Si muove sull'intero virtual screen e fa
+**wrap-around stile Pac-Man**: esce da un lato e rientra dall'altro, attraversando
+gli schermi senza soluzione di continuità.
 
 ---
 
-## 📁 Struttura Progetto
+## 🧠 Come è fatto
 
-```
-lupin-desktop-pet/
-├── main.py              # Entry point
-├── pet_brain.py         # State machine (24 stati, fisica, AI comportamentale)
-├── pet_window.py        # PyQt5 overlay + renderer procedurale Lupin
-├── desktop_hooks.py     # Win32 API — LVM_SETITEMPOSITION32, LVM_GETITEMTEXT
-├── sound_manager.py     # Audio pygame-ce
-├── launch.vbs           # Avvio silenzioso (no CMD)
-└── requirements.txt
-```
+| File | Ruolo |
+|---|---|
+| `main.py` | Entry point |
+| `pet_brain.py` | State machine: 24 stati, fisica, IA comportamentale, personalità |
+| `pet_window.py` | Overlay PyQt5 + renderer procedurale di Lupin (zero sprite) |
+| `desktop_hooks.py` | Win32: legge/sposta le icone reali del desktop |
+| `sound_manager.py` | Audio opzionale (pygame-ce, fallback silenzioso) |
 
----
-
-## 🔧 Requisiti
-
-```
-PyQt5>=5.15
-pywin32
-pygame-ce>=2.5   # opzionale — audio
-```
+Un paio di dettagli tecnici di cui vado fiero: i click sono rilevati con
+`GetAsyncKeyState` senza hook globali (niente mouse bloccato), e la posizione di
+Lupin è convertita con `mapToGlobal` per funzionare anche con monitor a sinistra
+(offset negativi) e DPI scaling. Le coordinate del cervello sono locali alla
+finestra e allineate a quelle delle icone del desktop, così furto e spinta sono
+precisi su qualsiasi configurazione di schermi.
 
 ---
 
-## 👤 Author
+## 👤 Autore
 
-**Lorenzo Garoffolo**  
-🌐 [lorenzo-garoffolo-cyber.netlify.app](https://lorenzo-garoffolo-cyber.netlify.app/)  
-📧 [GitHub: @Lorenzozero](https://github.com/Lorenzozero)
+**Lorenzo Garoffolo** · [Portfolio](https://lorenzo-garoffolo-cyber.netlify.app/) · [GitHub @Lorenzozero](https://github.com/Lorenzozero)
