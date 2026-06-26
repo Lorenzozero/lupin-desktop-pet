@@ -538,7 +538,15 @@ class LupinBrain:
                 self.say("pushing")
                 self._transition(S.PUSHING)
                 return
-            if r < 0.011 and visible:
+            if r < 0.013 and visible:
+                # Si siede su un'icona (più frequente)
+                idx = random.choice(list(visible.keys()))
+                self.sit_target = visible[idx]
+                self._sit_duration = random.randint(500, 1200)
+                self.say("sitting")
+                self._transition(S.SITTING)
+                return
+            if r < 0.016 and visible:
                 # Raccoglie un'icona e la porta in giro
                 idx = random.choice(list(visible.keys()))
                 self.carry_icon_idx = idx
@@ -548,14 +556,7 @@ class LupinBrain:
                 self.say("carrying")
                 self._transition(S.CARRYING)
                 return
-            if r < 0.013 and visible:
-                idx = random.choice(list(visible.keys()))
-                self.sit_target = visible[idx]
-                self._sit_duration = random.randint(500, 1200)
-                self.say("sitting")
-                self._transition(S.SITTING)
-                return
-            if r < 0.015:
+            if r < 0.019:
                 # Angolo schermo
                 corners = [(30, 30), (self.sw - 30, 30),
                            (30, self.sh - 90), (self.sw - 30, self.sh - 90)]
@@ -563,7 +564,7 @@ class LupinBrain:
                 self.say("corner")
                 self._transition(S.CORNER)
                 return
-            if r < 0.018:
+            if r < 0.022:
                 spot = self._find_lean_spot()
                 if spot:
                     self.lean_wall_x, self.lean_wall_y, self.lean_side, self.lean_is_screen = spot
@@ -571,22 +572,22 @@ class LupinBrain:
                     self.say(joke_key)
                     self._transition(S.LEANING)
                     return
-            if r < 0.020:
+            if r < 0.025:
                 self.say("volume_trick")
                 self._volume_presses = 0
                 self._transition(S.VOLUME_TRICK)
                 return
-            if r < 0.023:
+            if r < 0.028:
                 # Beve una birra
                 self.say("drinking")
                 self._transition(S.DRINKING)
                 return
             # Linguaccia casuale (senza cambiare stato)
-            if r < 0.026 and self.tongue_timer == 0:
+            if r < 0.031 and self.tongue_timer == 0:
                 self.say("linguaccia")
                 self.tongue_timer = 55
             # Rutto casuale
-            if r < 0.028 and self.tongue_timer == 0:
+            if r < 0.034 and self.tongue_timer == 0:
                 self.say("burp")
                 self.burp_pending = True
                 self.tongue_timer = 40
@@ -608,13 +609,13 @@ class LupinBrain:
 
     def _sleeping(self):
         self.mood = "sleepy"
-        # Va al centro-basso con movimento molto lento e fluido
-        target_x = self.vx_off + self.sw // 2
-        target_y = self.vy_off + self.sh - 200
-        self._move_smooth(target_x, target_y, 1.2, 0.04)
-        # Micro-oscillazione del corpo (respiro)
+        # Dondola lentamente avanti e indietro mentre dorme
+        cx = self.vx_off + self.sw // 2
+        cy = self.vy_off + self.sh - 200
+        drift_x = math.sin(self.timer * 0.018) * 28
+        drift_y = math.sin(self.timer * 0.011) * 12
+        self._move_smooth(cx + drift_x, cy + drift_y, 0.9, 0.03)
         if self.cursor_idle_frames == 0:
-            # Cursore tornato: sbadiglio poi si sveglia
             self.mood = "happy"
             self.say("wakeup_yawn")
             self._jump(10)

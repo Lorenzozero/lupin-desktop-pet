@@ -68,14 +68,36 @@ pythonw main.py
 | Feature | Dettaglio |
 |---|---|
 | **Furto icone** | `LVM_SETITEMPOSITION32` via `WriteProcessMemory` (32-bit safe) |
+| **Nome icona** | `LVM_GETITEMTEXT` via `ReadProcessMemory` — legge il titolo reale |
+| **Icona nascosta** | Durante CARRYING la vera icona è off-screen: si vede solo la replica |
 | **Auto-arrange off** | Disabilita `LVS_AUTOARRANGE` all'avvio |
 | **Spinta fisica** | Muove icona 2.5px/frame, rimbalza sui bordi |
-| **Trasporto in testa** | Icona segue la testa di Lupin frame-by-frame |
-| **Click → ripristino** | Clicca Lupin mentre spinge/trasporta → icona torna al posto |
+| **Trasporto in testa** | Replica visiva sopra la testa con nome reale + emoji tipo |
+| **Click → ripristino** | Clicca Lupin mentre trasporta → "scusa!" + icona torna al posto |
 | **Auto-ripristino** | Dopo 2 minuti: "Per stavolta sistemo io…" + ripristino |
 | **Scatter cerchio** | Icone disposte in ellisse attorno al centro |
 | **Scatter caos** | Icone in posizioni casuali visibili |
 | **Portale buco nero** | Animazione vortice viola all'entrata/uscita del ladro |
+
+### Icona Trasportata
+| Feature | Dettaglio |
+|---|---|
+| **Nome reale** | Titolo letto da Explorer (`LVM_GETITEMTEXT`) mostrato in pill scura |
+| **Emoji adattiva** | 📁 cartella / 🐍 Python / 🌐 browser / 🎮 giochi / ⚙️ .exe / 🗑️ cestino… |
+| **Alone pulsante** | Glow dorato animato con oscillazione sinusoidale |
+| **Nascosta durante carrying** | L'originale va a -300,-300; al rilascio torna alla posizione salvata |
+
+### Sistema Colpi (Click su Lupin)
+| Combo | Reazione + Particelle |
+|---|---|
+| ×1 | 💢 pugno + 😮 + stelle + "Ow! Che maleducato! 😤" |
+| ×2 | 💥 pugno grande + 😠 + scintille + "BASTARDO! Non colpirmi! 😡" |
+| ×3 | 🤛 + 😡 + onde d'urto + shake schermo + "Chiamo i Carabinieri! 🚔" |
+| ×4 | 👊 + 🤬 + flash + "Articolo 581 cp! 📜" |
+| ×5+ | 💥 + 💀 + flash schermo + "Ti denuncio a 8 tribunali!" |
+| Esausto | "VIGLIACCO! Colpisci un esausto!" |
+
+> **Click detection**: `GetAsyncKeyState(VK_LBUTTON)` poll ogni frame — nessun hook globale, nessun blocco del mouse. Raggio di rilevamento: ±65px orizzontale, ±90px verticale dal centro Lupin.
 
 ### Effetti Visivi
 | Feature | Dettaglio |
@@ -103,17 +125,6 @@ pythonw main.py
 | **Guance** | Rossore per stati felici/eccitati |
 | **Cappello** | Lupin III con tesa, corpo e fascetta rossa |
 
-### Sistema Colpi (Click Combo)
-| Combo | Reazione |
-|---|---|
-| ×1 | "Ow! Che maleducato! 😤" — piccolo salto |
-| ×2 | "BASTARDO! Non colpirmi! 😡" — salto medio |
-| ×3 | "Chiamo i Carabinieri! 🚔" — inizia a scappare |
-| ×4 | "Articolo 581 cp! 📜" — fuga con shake schermo |
-| ×5+ | "Ti denuncio a 8 tribunali!" — flash + fuga |
-| Esausto ×1-3 | "VIGLIACCO! Colpisci un esausto!" |
-| Esausto ×4 | Scappa con quel poco di forza rimasta |
-
 ### Personalità
 | Tipo | Aggressività | Distanza fuga | Avidità |
 |---|---|---|---|
@@ -136,7 +147,7 @@ lupin-desktop-pet/
 ├── main.py              # Entry point
 ├── pet_brain.py         # State machine (23 stati, fisica, AI comportamentale)
 ├── pet_window.py        # PyQt5 overlay + renderer procedurale Lupin
-├── desktop_hooks.py     # Win32 API per icone desktop (LVM_SETITEMPOSITION32)
+├── desktop_hooks.py     # Win32 API — LVM_SETITEMPOSITION32, LVM_GETITEMTEXT
 ├── sound_manager.py     # Audio pygame-ce
 ├── launch.vbs           # Avvio silenzioso (no CMD)
 └── requirements.txt

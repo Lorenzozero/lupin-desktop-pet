@@ -1,4 +1,4 @@
-import os, sys, math, random, ctypes, ctypes.wintypes, threading, queue
+import os, sys, math, random, ctypes, ctypes.wintypes
 import win32gui, win32con, win32api
 
 from PyQt5.QtWidgets import QMainWindow, QApplication
@@ -59,58 +59,7 @@ class Particle:
         return self.life > 0
 
 
-# ─────────────────────────────────────────────────────────
-#  Global mouse hook (WH_MOUSE_LL) – cattura click anche
-#  quando la finestra overlay è sotto le altre.
-# ─────────────────────────────────────────────────────────
-
-WH_MOUSE_LL   = 14
-WM_LBUTTONDOWN = 0x0201
-
-class MSLLHOOKSTRUCT(ctypes.Structure):
-    _fields_ = [
-        ("pt",          ctypes.wintypes.POINT),
-        ("mouseData",   ctypes.wintypes.DWORD),
-        ("flags",       ctypes.wintypes.DWORD),
-        ("time",        ctypes.wintypes.DWORD),
-        ("dwExtraInfo", ctypes.c_uint64),
-    ]
-
-class GlobalMouseHook:
-    """Intercetta WM_LBUTTONDOWN globalmente in un thread separato.
-    Ogni click viene messo in self.queue come (x, y)."""
-
-    def __init__(self):
-        self.queue  = queue.Queue()
-        self._hook  = None
-        self._proc  = None
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-
-    def _run(self):
-        HOOKPROC = ctypes.WINFUNCTYPE(
-            ctypes.c_long, ctypes.c_int,
-            ctypes.wintypes.WPARAM, ctypes.wintypes.LPARAM)
-
-        def _cb(nCode, wParam, lParam):
-            if nCode >= 0 and wParam == WM_LBUTTONDOWN:
-                ms = ctypes.cast(lParam, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
-                self.queue.put((ms.pt.x, ms.pt.y))
-            return ctypes.windll.user32.CallNextHookEx(self._hook, nCode, wParam, lParam)
-
-        self._proc = HOOKPROC(_cb)
-        self._hook = ctypes.windll.user32.SetWindowsHookExW(
-            WH_MOUSE_LL, self._proc, None, 0)
-
-        msg = ctypes.wintypes.MSG()
-        while ctypes.windll.user32.GetMessageW(ctypes.byref(msg), None, 0, 0):
-            ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
-            ctypes.windll.user32.DispatchMessageW(ctypes.byref(msg))
-
-    def stop(self):
-        if self._hook:
-            ctypes.windll.user32.UnhookWindowsHookEx(self._hook)
-            self._hook = None
+# Click detection via GetAsyncKeyState polling — no threads, no hook timeout risk
 
 
 class Toast:
@@ -229,7 +178,7 @@ class PetWindow(QMainWindow):
         self.greeted = False
 
         self._prev_hit_reaction = ""
-        self._mouse_hook = GlobalMouseHook()
+        self._lbutton_prev = False
 
         self._icon_tick = 0
         self._loop_timer = QTimer()
@@ -251,13 +200,15 @@ class PetWindow(QMainWindow):
     # ── Main loop ────────────────────────────────────────────
 
     def _loop(self):
-        # ── Drena click globali (WH_MOUSE_LL) ───────────────
-        try:
-            while True:
-                mx, my = self._mouse_hook.queue.get_nowait()
+        # ── Click detection via GetAsyncKeyState (no thread, no hook timeout) ──
+        lbtn = bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
+        if lbtn and not self._lbutton_prev:
+            try:
+                mx, my = win32api.GetCursorPos()
                 self._handle_global_click(mx, my)
-        except queue.Empty:
-            pass
+            except Exception:
+                pass
+        self._lbutton_prev = lbtn
 
         self._icon_tick += 1
         if self._icon_tick >= 200:
@@ -1270,32 +1221,42 @@ class PetWindow(QMainWindow):
     # ── Speech bubble ─────────────────────────────────────────
 
     def _draw_bubble(self, p, cx, cy, text, scale):
-        bw, bh = 270, 62
-        bx, by = -bw // 2, -bh - 15
+        bw, bh = 310, 76
+        bx, by = -bw // 2, -bh - 18
         p.save()
         p.translate(cx, cy)
         p.scale(scale, scale)
-        # Shadow
-        for i in range(3):
-            sp = QPainterPath()
-            sp.addRoundedRect(bx + 2 + i, by + 2 + i, bw, bh, 12, 12)
-            p.fillPath(sp, QBrush(QColor(0, 0, 0, 12)))
-        # Fill
+        # Drop shadow
+        shadow_path = QPainterPath()
+        shadow_path.addRoundedRect(bx + 4, by + 4, bw, bh, 16, 16)
+        p.fillPath(shadow_path, QBrush(QColor(0, 0, 0, 55)))
+        # Fill gradient — cream white
         g = QLinearGradient(0, by, 0, by + bh)
-        g.setColorAt(0, QColor(255, 255, 252));  g.setColorAt(1, QColor(255, 248, 215))
-        path = QPainterPath();  path.addRoundedRect(bx, by, bw, bh, 12, 12)
+        g.setColorAt(0, QColor(255, 255, 255))
+        g.setColorAt(1, QColor(255, 245, 200))
+        path = QPainterPath()
+        path.addRoundedRect(bx, by, bw, bh, 16, 16)
         p.fillPath(path, QBrush(g))
-        p.setPen(QPen(QColor(120, 120, 120), 2));  p.drawPath(path)
-        # Tail
-        tail = [QPoint(-9, by + bh), QPoint(9, by + bh), QPoint(-14, by + bh + 14)]
-        p.setBrush(QBrush(QColor(255, 248, 215)));  p.setPen(QPen(QColor(120, 120, 120), 2))
-        p.drawPolygon(*tail)
-        # Text
-        p.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        p.setPen(QColor(200, 200, 200))
-        p.drawText(QRect(bx + 11, by + 9, bw - 20, bh - 14), Qt.AlignCenter | Qt.TextWordWrap, text)
-        p.setPen(QColor(30, 30, 30))
-        p.drawText(QRect(bx + 10, by + 8, bw - 20, bh - 14), Qt.AlignCenter | Qt.TextWordWrap, text)
+        # Border
+        p.setPen(QPen(QColor(60, 40, 10), 2.5))
+        p.drawPath(path)
+        # Tail (triangolo che punta verso Lupin)
+        tail_pts = [QPoint(-10, by + bh - 1), QPoint(10, by + bh - 1), QPoint(0, by + bh + 16)]
+        tail_path = QPainterPath()
+        tail_path.moveTo(-10, by + bh - 1)
+        tail_path.lineTo(10, by + bh - 1)
+        tail_path.lineTo(0, by + bh + 16)
+        tail_path.closeSubpath()
+        p.fillPath(tail_path, QBrush(QColor(255, 245, 200)))
+        p.setPen(QPen(QColor(60, 40, 10), 2.5))
+        p.drawLine(-10, by + bh, 0, by + bh + 16)
+        p.drawLine(10, by + bh, 0, by + bh + 16)
+        # Text — shadow then main
+        p.setFont(QFont("Segoe UI Emoji", 11, QFont.Bold))
+        p.setPen(QColor(220, 180, 80, 120))
+        p.drawText(QRect(bx + 13, by + 11, bw - 24, bh - 16), Qt.AlignCenter | Qt.TextWordWrap, text)
+        p.setPen(QColor(25, 15, 5))
+        p.drawText(QRect(bx + 12, by + 10, bw - 24, bh - 16), Qt.AlignCenter | Qt.TextWordWrap, text)
         p.restore()
 
     # ── Particles paint ───────────────────────────────────────
@@ -1553,7 +1514,6 @@ class PetWindow(QMainWindow):
             self._prev_hit_reaction = reaction
 
     def closeEvent(self, e):
-        self._mouse_hook.stop()
         super().closeEvent(e)
 
     def keyPressEvent(self, e):
