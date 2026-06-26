@@ -122,6 +122,26 @@ JOKES = {
                    "Mi appoggio un attimo... 🧱",
                    "Questo muro è comodo!",
                    "Ho trovato il posto migliore 😏"],
+    "leaning_lamp":["Bella seratina... quante borse ho fregato 🌙",
+                    "Il lampione non parla. A differenza dei testimoni. 🤫",
+                    "Ho rubato in 47 paesi. Mai preso. 🌍",
+                    "Stanotte ho un colpo da 3 icone... tecnicamente. 🎩",
+                    "Chi ha inventato le icone non ha mai incontrato me 😈",
+                    "La luna mi copre. Il lampione illumina gli altri. 🕯️",
+                    "Ogni grande ladro ha il suo lampione preferito! 😎",
+                    "Pensiero: rubare è come scaricare file. Veloce e indolore. 💾",
+                    "Il mio avvocato dice che tecnicamente non è furto se ridi mentre lo fai 😂",
+                    "Quante rapine ho fatto? Non si conta. Si celebra! 🥂"],
+    "wakeup_yawn":["*Sbadiglio* Già mattina? 😪",
+                   "Zzz... ah! Chi c'è?! 😲",
+                   "Dormivo così bene... 😴",
+                   "Mi hai svegliato sul più bello! 😤"],
+    "idle_stretch":["Aaahh! Mi scricchiola tutto! 😌",
+                    "Stiracchiata mattutina... 🙆",
+                    "Creeeek... eccellente! 💪"],
+    "idle_look":   ["...cosa c'è là? 🤔",
+                    "Hmm... qualcosa non quadra.",
+                    "Sto pianificando qualcosa. Non chiedere. 😏"],
     "corner":     ["Nessuno mi trova qui! 😏",
                    "Il mio angolo segreto! 🤫",
                    "Voi umani non capite gli angoli.",
@@ -244,6 +264,14 @@ class LupinBrain:
         self.carry_icon_idx  = None
         self.carry_icon_pos  = (0, 0)   # posizione fake per il disegno
         self.carry_icon_name = ""       # nome dell'icona trasportata
+
+        # Idle micro-behaviors
+        self.idle_look_dir   = 0        # -1 sinistra, 0 centro, 1 destra
+        self.idle_look_timer = 0        # timer per cambio direzione sguardo
+        self.idle_micro      = None     # "stretch" | "look" | None
+
+        # Leaning
+        self.lean_is_screen  = False    # True se appoggiato a bordo schermo (lampione)
 
         # Sitting
         self.sit_target    = None
@@ -457,6 +485,24 @@ class LupinBrain:
         if not self.is_jumping and self.timer % 140 == 0 and random.random() < 0.4:
             self._jump(16)
 
+        # Micro-comportamenti idle: guarda in giro, stiracchia
+        self.idle_look_timer += 1
+        if self.idle_look_timer > random.randint(180, 360):
+            self.idle_look_timer = 0
+            self.idle_look_dir = random.choice([-1, 0, 0, 1])
+            if random.random() < 0.25:
+                self.idle_micro = "stretch"
+                self.say("idle_stretch")
+            elif random.random() < 0.2:
+                self.idle_micro = "look"
+                if random.random() < 0.3:
+                    self.say("idle_look")
+            else:
+                self.idle_micro = None
+        # Reset micro-behavior dopo un po'
+        if self.idle_micro and self.idle_look_timer > 80:
+            self.idle_micro = None
+
         dist = self._dist_cursor()
 
         # Curiosità verso il cursore
@@ -520,8 +566,9 @@ class LupinBrain:
             if r < 0.018:
                 spot = self._find_lean_spot()
                 if spot:
-                    self.lean_wall_x, self.lean_wall_y, self.lean_side = spot
-                    self.say("leaning")
+                    self.lean_wall_x, self.lean_wall_y, self.lean_side, self.lean_is_screen = spot
+                    joke_key = "leaning_lamp" if self.lean_is_screen else "leaning"
+                    self.say(joke_key)
                     self._transition(S.LEANING)
                     return
             if r < 0.020:
@@ -561,10 +608,16 @@ class LupinBrain:
 
     def _sleeping(self):
         self.mood = "sleepy"
-        self._move_smooth(self.sw // 2, self.sh - 220, 1.5, 0.06)
+        # Va al centro-basso con movimento molto lento e fluido
+        target_x = self.vx_off + self.sw // 2
+        target_y = self.vy_off + self.sh - 200
+        self._move_smooth(target_x, target_y, 1.2, 0.04)
+        # Micro-oscillazione del corpo (respiro)
         if self.cursor_idle_frames == 0:
+            # Cursore tornato: sbadiglio poi si sveglia
             self.mood = "happy"
-            self.say("wakeup")
+            self.say("wakeup_yawn")
+            self._jump(10)
             self._transition(S.WAVING)
 
     def _curious(self):
@@ -776,16 +829,18 @@ class LupinBrain:
             if x2 < self.sw - ARM_REACH - 10:
                 candidates.append((x2 + ARM_REACH, wy, "left"))
 
-        # Bordi dello schermo (sempre candidati)
-        candidates += [
-            (ARM_REACH,           mid_y, "left"),    # schermo sinistro: muro a sx
-            (self.sw - ARM_REACH, mid_y, "right"),   # schermo destro:   muro a dx
+        # Bordi dello schermo (sempre candidati) — LAMPIONE
+        screen_candidates = [
+            (self.vx_off + ARM_REACH,           mid_y, "left"),
+            (self.vx_off + self.sw - ARM_REACH, mid_y, "right"),
         ]
+        candidates += screen_candidates
 
         wx, wy, side = random.choice(candidates)
-        wx = max(ARM_REACH, min(self.sw - ARM_REACH, wx))
-        wy = max(60, min(taskbar_y - 60, wy))
-        return wx, wy, side
+        is_screen = (wx, wy, side) in screen_candidates
+        wx = max(self.vx_off + ARM_REACH, min(self.vx_off + self.sw - ARM_REACH, wx))
+        wy = max(self.vy_off + 60, min(self.vy_off + taskbar_y - 60, wy))
+        return wx, wy, side, is_screen
 
     def _leaning(self):
         """Cammina fino al bordo e si appoggia con un braccio."""
@@ -798,7 +853,7 @@ class LupinBrain:
 
         # Battute periodiche mentre è appoggiato
         if dist < 40 and self.timer % 280 == 60:
-            self.say("leaning")
+            self.say("leaning_lamp" if self.lean_is_screen else "leaning")
 
         # Piccolo dondolio alla parete
         if dist < 40 and not self.is_jumping and self.timer % 200 == 0:
@@ -1161,6 +1216,11 @@ class LupinBrain:
             tongue_timer=self.tongue_timer,
             burp_pending=self.burp_pending,
             lean_side=self.lean_side,
+            lean_wall_x=self.lean_wall_x,
+            lean_wall_y=self.lean_wall_y,
+            lean_is_screen=self.lean_is_screen,
+            idle_look_dir=self.idle_look_dir,
+            idle_micro=self.idle_micro,
             hit_combo=self.hit_combo,
             hit_reaction=self.hit_reaction,
             peek_side=self.peek_side,

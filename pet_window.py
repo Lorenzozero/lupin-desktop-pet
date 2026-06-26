@@ -1,4 +1,4 @@
-import os, sys, math, random
+import os, sys, math, random, ctypes, ctypes.wintypes, threading, queue
 import win32gui, win32con, win32api
 
 from PyQt5.QtWidgets import QMainWindow, QApplication
@@ -57,6 +57,60 @@ class Particle:
             self.vy += 0.3;  self.life -= 0.022
         self.x += self.vx;  self.y += self.vy
         return self.life > 0
+
+
+# ─────────────────────────────────────────────────────────
+#  Global mouse hook (WH_MOUSE_LL) – cattura click anche
+#  quando la finestra overlay è sotto le altre.
+# ─────────────────────────────────────────────────────────
+
+WH_MOUSE_LL   = 14
+WM_LBUTTONDOWN = 0x0201
+
+class MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("pt",          ctypes.wintypes.POINT),
+        ("mouseData",   ctypes.wintypes.DWORD),
+        ("flags",       ctypes.wintypes.DWORD),
+        ("time",        ctypes.wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_uint64),
+    ]
+
+class GlobalMouseHook:
+    """Intercetta WM_LBUTTONDOWN globalmente in un thread separato.
+    Ogni click viene messo in self.queue come (x, y)."""
+
+    def __init__(self):
+        self.queue  = queue.Queue()
+        self._hook  = None
+        self._proc  = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self):
+        HOOKPROC = ctypes.WINFUNCTYPE(
+            ctypes.c_long, ctypes.c_int,
+            ctypes.wintypes.WPARAM, ctypes.wintypes.LPARAM)
+
+        def _cb(nCode, wParam, lParam):
+            if nCode >= 0 and wParam == WM_LBUTTONDOWN:
+                ms = ctypes.cast(lParam, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
+                self.queue.put((ms.pt.x, ms.pt.y))
+            return ctypes.windll.user32.CallNextHookEx(self._hook, nCode, wParam, lParam)
+
+        self._proc = HOOKPROC(_cb)
+        self._hook = ctypes.windll.user32.SetWindowsHookExW(
+            WH_MOUSE_LL, self._proc, None, 0)
+
+        msg = ctypes.wintypes.MSG()
+        while ctypes.windll.user32.GetMessageW(ctypes.byref(msg), None, 0, 0):
+            ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
+            ctypes.windll.user32.DispatchMessageW(ctypes.byref(msg))
+
+    def stop(self):
+        if self._hook:
+            ctypes.windll.user32.UnhookWindowsHookEx(self._hook)
+            self._hook = None
 
 
 class Toast:
@@ -175,6 +229,7 @@ class PetWindow(QMainWindow):
         self.greeted = False
 
         self._prev_hit_reaction = ""
+        self._mouse_hook = GlobalMouseHook()
 
         self._icon_tick = 0
         self._loop_timer = QTimer()
@@ -185,16 +240,25 @@ class PetWindow(QMainWindow):
 
     # ── Win32 ────────────────────────────────────────────────
 
-    def _set_passthrough(self, on):
+    def _set_passthrough(self, on=True):
+        """Sempre WS_EX_TRANSPARENT: il desktop e le app sotto non vengono mai bloccati.
+        I click su Lupin sono catturati dal WH_MOUSE_LL global hook."""
         hwnd = int(self.winId())
         ex = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-        if on: ex |= win32con.WS_EX_TRANSPARENT | win32con.WS_EX_LAYERED
-        else:  ex &= ~win32con.WS_EX_TRANSPARENT
+        ex |= win32con.WS_EX_TRANSPARENT | win32con.WS_EX_LAYERED
         win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, ex)
 
     # ── Main loop ────────────────────────────────────────────
 
     def _loop(self):
+        # ── Drena click globali (WH_MOUSE_LL) ───────────────
+        try:
+            while True:
+                mx, my = self._mouse_hook.queue.get_nowait()
+                self._handle_global_click(mx, my)
+        except queue.Empty:
+            pass
+
         self._icon_tick += 1
         if self._icon_tick >= 200:
             self.icons = self.hooks.get_all_positions()
@@ -359,11 +423,20 @@ class PetWindow(QMainWindow):
                 QColor(255, 220, 60), 18,
                 random.uniform(-2, 2), random.uniform(-3, -1), "note"))
 
-        if state == S.SLEEPING and t % 80 == 0:
-            self.particles.append(Particle(
-                nfo["x"] + 28, nfo["y"] - 60,
-                QColor(180, 160, 255), 15 + (t // 80 % 3) * 5,
-                random.uniform(-0.2, 0.2), -0.5, "zzz"))
+        if state == S.SLEEPING:
+            # Zzz dalla bocca a dimensioni crescenti (3 taglie cicliche)
+            if t % 70 == 0:
+                size_cycle = (t // 70) % 3
+                self.particles.append(Particle(
+                    nfo["x"] + 18, nfo["y"] - 42,   # bocca di Lupin
+                    QColor(180, 160, 255), 14 + size_cycle * 6,
+                    random.uniform(0.3, 0.8), random.uniform(-0.8, -0.4), "zzz"))
+            # Sogno: bolla di pensiero ogni ~300 frame
+            if t % 300 == 150:
+                self.particles.append(Particle(
+                    nfo["x"] + 22, nfo["y"] - 80,
+                    QColor(200, 200, 255, 180), 20,
+                    0.2, -0.3, "zzz"))
 
         if state == S.CELEBRATING:
             if t % 18 == 0:
@@ -439,9 +512,6 @@ class PetWindow(QMainWindow):
         self.toasts    = [t for t in self.toasts    if t.update()]
         self.portals   = [p for p in self.portals   if p.update()]
 
-        # Passthrough
-        pr = QRect(int(nfo["x"]) - SIZE//2 - 20, int(nfo["y"]) - SIZE//2 - 30, SIZE+40, SIZE+60)
-        self._set_passthrough(not pr.contains(QCursor.pos()))
         self.update()
 
     def _say(self, text, dur=220):
@@ -492,6 +562,10 @@ class PetWindow(QMainWindow):
 
         # 2b. Particles
         self._paint_particles(p)
+
+        # 2b. Lampione (disegnato PRIMA di Lupin, dietro)
+        if nfo.get("is_leaning") and nfo.get("lean_is_screen"):
+            self._draw_lamppost(p, nfo, t_global)
 
         # 3. Shadow (si riduce con l'altezza del salto)
         sh_y = py + SIZE // 2 + 10 + jz * 0.1
@@ -1279,6 +1353,91 @@ class PetWindow(QMainWindow):
 
     # ── Toasts ────────────────────────────────────────────────
 
+    # ── Lampione ───────────────────────────────────────────────
+
+    def _draw_lamppost(self, p, nfo, t):
+        """Disegna un lampione quando Lupin si appoggia al bordo schermo."""
+        side = nfo.get("lean_side", "right")
+        lx = nfo.get("lean_wall_x", 0)
+        ly = nfo.get("lean_wall_y", 0)
+
+        # Il palo è leggermente spostato verso il bordo schermo
+        pole_x = lx + (28 if side == "right" else -28)
+        pole_bot = ly + 90
+        pole_top = ly - 150
+
+        p.setOpacity(1.0)
+        p.save()
+
+        # ── Glow lanterna (sotto tutto il resto) ────────────
+        glow_x = pole_x + (0 if side == "right" else 0)
+        arm_end_x = pole_x + (-55 if side == "right" else 55)  # punta braccio
+        glow_pulse = 0.72 + math.sin(t * 0.05) * 0.12
+        glow = QRadialGradient(arm_end_x, pole_top + 30, 65)
+        glow.setColorAt(0,   QColor(255, 220, 100, int(90 * glow_pulse)))
+        glow.setColorAt(0.5, QColor(255, 200, 60,  int(40 * glow_pulse)))
+        glow.setColorAt(1,   QColor(255, 180, 0,   0))
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(glow))
+        p.drawEllipse(int(arm_end_x - 65), int(pole_top - 35), 130, 130)
+
+        # ── Palo verticale ───────────────────────────────────
+        # Ombra palo
+        p.setBrush(QBrush(QColor(20, 20, 20, 120)))
+        p.drawRoundedRect(int(pole_x - 3), int(pole_top), 10, int(pole_bot - pole_top), 4, 4)
+        # Palo principale con gradiente metallico
+        pole_grad = QLinearGradient(pole_x - 5, 0, pole_x + 5, 0)
+        pole_grad.setColorAt(0,   QColor(80, 80, 90))
+        pole_grad.setColorAt(0.3, QColor(140, 140, 155))
+        pole_grad.setColorAt(0.7, QColor(100, 100, 110))
+        pole_grad.setColorAt(1,   QColor(50, 50, 60))
+        p.setBrush(QBrush(pole_grad))
+        p.setPen(QPen(QColor(30, 30, 40), 1))
+        p.drawRoundedRect(int(pole_x - 5), int(pole_top), 10, int(pole_bot - pole_top), 4, 4)
+
+        # ── Braccio curvo in cima ─────────────────────────────
+        arm_ctrl_x = pole_x + (-20 if side == "right" else 20)
+        path = QPainterPath()
+        path.moveTo(pole_x, pole_top + 12)
+        path.cubicTo(pole_x, pole_top - 10,
+                     arm_ctrl_x, pole_top - 15,
+                     arm_end_x, pole_top + 20)
+        arm_pen = QPen(QColor(100, 100, 110), 7, Qt.SolidLine, Qt.RoundCap)
+        p.setPen(arm_pen)
+        p.setBrush(Qt.NoBrush)
+        p.drawPath(path)
+        # bordo chiaro braccio
+        arm_pen2 = QPen(QColor(160, 160, 175), 3, Qt.SolidLine, Qt.RoundCap)
+        p.setPen(arm_pen2)
+        p.drawPath(path)
+
+        # ── Lanterna ─────────────────────────────────────────
+        lant_x, lant_y = int(arm_end_x), int(pole_top + 20)
+        # Cappuccio lanterna
+        p.setBrush(QBrush(QColor(60, 60, 70)))
+        p.setPen(QPen(QColor(30, 30, 40), 1))
+        p.drawPolygon(*[QPoint(lant_x + dx, lant_y + dy)
+                        for dx, dy in [(-14, 0), (14, 0), (10, -16), (-10, -16)]])
+        # Corpo lanterna (vetro illuminato)
+        lantern_grad = QRadialGradient(lant_x, lant_y + 14, 5, lant_x, lant_y + 14, 16)
+        lantern_grad.setColorAt(0, QColor(255, 240, 160, int(230 * glow_pulse)))
+        lantern_grad.setColorAt(0.6, QColor(255, 210, 80, int(200 * glow_pulse)))
+        lantern_grad.setColorAt(1, QColor(200, 150, 30, int(120 * glow_pulse)))
+        p.setBrush(QBrush(lantern_grad))
+        p.setPen(QPen(QColor(80, 60, 20), 1.5))
+        p.drawRoundedRect(lant_x - 13, lant_y, 26, 28, 4, 4)
+        # Riflesso vetro
+        p.setBrush(QBrush(QColor(255, 255, 255, 60)))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(lant_x - 8, lant_y + 3, 8, 10, 2, 2)
+
+        # ── Base palo ────────────────────────────────────────
+        p.setBrush(QBrush(QColor(55, 55, 65)))
+        p.setPen(QPen(QColor(30, 30, 40), 1))
+        p.drawRoundedRect(int(pole_x - 12), int(pole_bot - 8), 24, 10, 3, 3)
+
+        p.restore()
+
     def _draw_toasts(self, p):
         for i, toast in enumerate(self.toasts):
             a = int(255 * min(toast.life * 3, 1.0))
@@ -1307,19 +1466,48 @@ class PetWindow(QMainWindow):
 
     # ── Input ─────────────────────────────────────────────────
 
+    # ── Hit globale (via hook) ────────────────────────────────
+
+    def _handle_global_click(self, mx, my):
+        """Processa un click globale: reagisce solo se vicino a Lupin."""
+        nfo = self.brain.info
+        px, py = nfo["x"], nfo["y"]
+        # Lupin ha bounding-box circa 60px larghezza × 120px altezza
+        if abs(mx - px) > 65 or abs(my - (py - 40)) > 90:
+            return
+        self._do_hit(mx, my)
+
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton:
             return
+        # Il click Qt arriva solo quando la finestra è in cima;
+        # in quel caso lo gestiamo comunque (fall-through sicuro).
+        nfo = self.brain.info
+        px, py = nfo["x"], nfo["y"]
+        mx, my = e.x() + self._vx, e.y() + self._vy
+        if abs(mx - px) > 65 or abs(my - (py - 40)) > 90:
+            return
+        self._do_hit(mx, my)
 
+    def _do_hit(self, mx, my):
+        """Logica colpo: particelle + speech bubble."""
         prev_combo = self.brain.hit_combo
         self.brain.on_click()
         nfo = self.brain.info
         combo = nfo["hit_combo"]
-        mx, my = e.x(), e.y()
         px, py = nfo["x"], nfo["y"]
 
         # ── Particelle colpo ─────────────────────────────────
-        # Stelle/impact
+        # Pugno visivo sul punto di impatto (💥 grande)
+        punch_emoji = ["💢", "💥", "🤛", "👊"][min(combo - 1, 3)]
+        punch_p = Particle(
+            mx, my - 10,
+            QColor(255, 80, 0), 34,
+            random.uniform(-0.5, 0.5), random.uniform(-3, -1.5), "emoji_pain")
+        punch_p._emoji = punch_emoji
+        self.particles.append(punch_p)
+
+        # Stelle/impact intorno al punto di impatto
         impact_count = 8 + combo * 6
         for _ in range(impact_count):
             self.particles.append(Particle(
@@ -1327,15 +1515,15 @@ class PetWindow(QMainWindow):
                 my + random.randint(-12, 12),
                 QColor(255, random.randint(100, 220), 0), 7, ptype="star"))
 
-        # Emoji dolore fluttuanti (tipo fumetto)
+        # Emoji reazione Lupin (sale verso la testa)
         pain_emojis = {1: "😮", 2: "😠", 3: "😡", 4: "🤬", 5: "💀"}
-        emoji = pain_emojis.get(min(combo, 5), "💢")
-        self.particles.append(Particle(
+        react_emoji = pain_emojis.get(min(combo, 5), "💢")
+        react_p = Particle(
             px + random.randint(-20, 20), py - 60,
             QColor(255, 60, 60), 26,
-            random.uniform(-1.5, 1.5), random.uniform(-4, -2), "emoji_pain"))
-        # Salva l'emoji nel particle per usarla nel draw
-        self.particles[-1]._emoji = emoji
+            random.uniform(-1.5, 1.5), random.uniform(-4, -2), "emoji_pain")
+        react_p._emoji = react_emoji
+        self.particles.append(react_p)
 
         # Scintille colorate
         for _ in range(6):
@@ -1363,6 +1551,10 @@ class PetWindow(QMainWindow):
         if reaction and reaction != self._prev_hit_reaction:
             self._say(reaction, 200)
             self._prev_hit_reaction = reaction
+
+    def closeEvent(self, e):
+        self._mouse_hook.stop()
+        super().closeEvent(e)
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
