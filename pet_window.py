@@ -235,7 +235,7 @@ class PetWindow(QMainWindow):
         prev_x, prev_y = self.brain.x, self.brain.y
         prev_state = self.brain.state
         # Freeze movimento mentre parla (ma non durante il sonno — deve dondolare)
-        self.brain.frozen = self.speech_active and state != S.SLEEPING
+        self.brain.frozen = self.speech_active and self.brain.state != S.SLEEPING
         self.brain.update(self.icons)
         nfo = self.brain.info
         state = nfo["state"]
