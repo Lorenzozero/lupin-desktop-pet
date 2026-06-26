@@ -81,20 +81,20 @@ JOKES = {
                    "Aspettami! 😅",
                    "Ti seguo ovunque! 👣"],
     "hit_1":      ["Ow! Che maleducato! 😤",
-                   "Ehi! Attento! 😠",
-                   "Cosa ti ho fatto?!",
-                   "Non ho fatto nulla! 😇",
+                   "Ehi STRONZO! Attento! 😠",
+                   "Ma sei scemo?! 😡",
+                   "Giù le mani, cafone! ✋",
                    "Questo è bullismo! 📢"],
     "hit_2":      ["BASTARDO! Non colpirmi! 😡",
-                   "Smettila o chiamo mia nonna! 👵",
+                   "STRONZO! Ma che problemi hai?! 🤬",
                    "Sei una persona orribile! 😤",
                    "Mi stai facendo male, psicopatico!",
-                   "Il tuo karma sarà terribile! ☠️"],
-    "hit_3":      ["BASTA! Chiamo i Carabinieri! 🚔",
-                   "Questo è reato! Articolo 581 cp! 📜",
-                   "Denuncia depositata! ⚖️",
+                   "Pezzo di MERDA, smettila! 💢"],
+    "hit_3":      ["BASTA! CHIAMO LA POLIZIA! 🚔",
+                   "113?! Sì, un BASTARDO mi picchia! 📞",
+                   "Denuncia depositata, STRONZO! ⚖️",
                    "Violenza su animale virtuale! VERGOGNA!",
-                   "Sei peggio del mio avvocato!"],
+                   "Chiamo Zenigata E i Carabinieri! 🚨"],
     "hit_escape": ["SCAPPO! Tornerò con gli avvocati! 😤",
                    "VIGLIACCO! Ti denuncio a 8 tribunali!",
                    "Non ti perdonerò mai, MOSTRO! 💢",
@@ -468,22 +468,17 @@ class LupinBrain:
         elif self.x > right:
             self.x = left + 50
             self.just_wrapped = True
-        # Wrap verticale (esce dall'alto → rientra dal basso e viceversa).
-        # In EXHAUSTED resta a terra (niente wrap verticale).
-        if self.state == S.EXHAUSTED:
-            floor = self.vy_off + self.sh - 80
-            if self.y > floor:
-                self.y = floor
-                self.vy = -abs(self.vy) * 0.5
-            return
-        top    = self.vy_off - 30
-        bottom = self.vy_off + self.sh + 30
+        # Verticale: clamp (NO wrap). Il wrap verticale spezzava il personaggio
+        # attraverso il centro schermo. Margini ampi così testa/cappello e piedi
+        # restano sempre interamente visibili.
+        floor = self.vy_off + self.sh + 10 if self.state == S.EXHAUSTED else self.vy_off + self.sh - 75
+        top   = self.vy_off + 95
         if self.y < top:
-            self.y = bottom - 50
-            self.just_wrapped = True
-        elif self.y > bottom:
-            self.y = top + 50
-            self.just_wrapped = True
+            self.y = top
+            self.vy = abs(self.vy) * 0.5
+        elif self.y > floor:
+            self.y = floor
+            self.vy = -abs(self.vy) * 0.5
 
     def _jump(self, force=18):
         if not self.is_jumping:

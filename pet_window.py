@@ -360,7 +360,8 @@ class PetWindow(QMainWindow):
                         nfo["x"], nfo["y"] + 40,
                         QColor(200, 190, 170, 140), 9,
                         random.uniform(-2, 2), random.uniform(-1, 0.3), "dust"))
-            spd = math.hypot(nfo["x"] - prev_x, nfo["y"] - prev_y)
+            # Nel frame del teletrasporto wrap lo spostamento è enorme: ignoralo
+            spd = 0 if nfo.get("just_wrapped") else math.hypot(nfo["x"] - prev_x, nfo["y"] - prev_y)
             self.squash  = 1.0 - min(spd * 0.022, 0.32)
             self.body_rot = math.sin(self.brain.global_timer * 0.28) * 7
             # Gocce di sudore se cursore vicino
@@ -470,9 +471,10 @@ class PetWindow(QMainWindow):
                 nfo["x"] + random.randint(-28, 28), nfo["y"] - random.randint(20, 55),
                 QColor(255, 120, 160), 14, ptype="heart"))
 
-        # Wrap flash
+        # Wrap flash + azzera la scia (evita striscia lunga attraverso lo schermo)
         if nfo["just_wrapped"]:
             self.flash_a = max(self.flash_a, 80)
+            self.trail.clear()
 
         # Trail
         self.trail.append((prev_x, prev_y))
@@ -586,17 +588,13 @@ class PetWindow(QMainWindow):
         # 4. Lupin character — con wrap-around Pac-Man: vicino a un bordo
         #    viene disegnata anche la copia "fantasma" sul lato opposto.
         draw_y = py + jz
+        # Wrap-around solo ORIZZONTALE (attraversa i monitor): copia "fantasma"
+        # sul lato opposto quando vicino al bordo sinistro/destro.
         offsets = [(0, 0)]
         if px < SIZE:
             offsets.append((self.sw, 0))
         elif px > self.sw - SIZE:
             offsets.append((-self.sw, 0))
-        if draw_y < SIZE:
-            offsets.append((0, self.sh))
-        elif draw_y > self.sh - SIZE:
-            offsets.append((0, -self.sh))
-        if len(offsets) == 3:   # vicino a un angolo → copia anche in diagonale
-            offsets.append((offsets[1][0], offsets[2][1]))
         for dox, doy in offsets:
             self._draw_lupin_at(p, nfo, t_global, px + dox, draw_y + doy)
 
@@ -730,12 +728,8 @@ class PetWindow(QMainWindow):
         ox, oy = self.shake_off
         p.translate(cx + ox, cy + oy)
         p.rotate(self.body_rot)
-        if nfo["is_hiding"]:
-            peek_w = SIZE // 3
-            if nfo["peek_side"] == "right":
-                p.setClipRect(QRect(SIZE//2 - peek_w, -SIZE, peek_w, SIZE * 2))
-            else:
-                p.setClipRect(QRect(-SIZE//2, -SIZE, peek_w, SIZE * 2))
+        # NB: niente clip in HIDING — l'overlay è trasparente, quindi ritagliare
+        # Lupin lo faceva sembrare "mezzo personaggio" tagliato che fluttua.
         self._draw_lupin(p, nfo, t)
         p.restore()
 
