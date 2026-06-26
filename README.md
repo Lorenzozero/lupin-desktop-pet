@@ -32,7 +32,12 @@ start launch.vbs      # avvio silenzioso (no finestra CMD)
 # oppure:  pythonw main.py
 ```
 
-Premi **ESC** per chiudere e rimettere tutte le icone al loro posto.
+### Come chiuderlo
+
+Due modi, entrambi rimettono tutte le icone esattamente dov'erano:
+
+- **Icona nella system tray** (vicino all'orologio) → tasto destro → **Esci**
+- Tasto **ESC** quando Lupin ha il focus
 
 ---
 
@@ -92,7 +97,7 @@ precisi su qualsiasi configurazione di schermi.
 | **Click destro** (carezza) | Cuori, scintille, reazione imbarazzata |
 | **Click mentre trasporta un'icona** | *"Scusa!"* → rimette l'icona al suo posto |
 | **Click mentre schernisce/prank** | Si arrende → ripristina tutto il desktop |
-| **ESC** | Chiude e ripristina ogni icona |
+| **ESC** o **tray → Esci** | Chiude l'app e ripristina ogni icona |
 
 ### Sistema colpi — stato normale
 | Combo | Reazione |

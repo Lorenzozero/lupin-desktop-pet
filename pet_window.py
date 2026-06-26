@@ -1,7 +1,9 @@
 import os, sys, math, random, ctypes, ctypes.wintypes
 import win32gui, win32con, win32api
 
-from PyQt5.QtWidgets import QMainWindow, QApplication
+from PyQt5.QtWidgets import (
+    QMainWindow, QApplication, QSystemTrayIcon, QMenu, QAction, QStyle,
+)
 from PyQt5.QtCore import Qt, QTimer, QRect, QPoint, QRectF
 from PyQt5.QtGui import (
     QPainter, QColor, QFont, QBrush, QPen,
@@ -188,7 +190,30 @@ class PetWindow(QMainWindow):
         self._loop_timer.timeout.connect(self._loop)
         self._loop_timer.start(16)
         self._set_passthrough(True)
+        self._setup_tray()
         self.show()
+
+    # ── Tray icon ────────────────────────────────────────────
+
+    def _setup_tray(self):
+        """Icona nella system tray con menu 'Esci' (chiusura comoda)."""
+        self.tray = QSystemTrayIcon(self)
+        self.tray.setIcon(self.style().standardIcon(QStyle.SP_DialogYesButton))
+        self.tray.setToolTip("Lupin Desktop Pet")
+        menu = QMenu()
+        quit_action = QAction("Esci", self)
+        quit_action.triggered.connect(self._quit_app)
+        menu.addAction(quit_action)
+        self.tray.setContextMenu(menu)
+        self.tray.show()
+
+    def _quit_app(self):
+        """Ripristina tutte le icone del desktop e chiude l'app."""
+        try:
+            self.hooks.restore_icons()
+        except Exception:
+            pass
+        QApplication.quit()
 
     # ── Win32 ────────────────────────────────────────────────
 
@@ -1630,5 +1655,4 @@ class PetWindow(QMainWindow):
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
-            self.hooks.restore_icons()
-            self.close()
+            self._quit_app()
