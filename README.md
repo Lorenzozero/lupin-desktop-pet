@@ -31,36 +31,39 @@ pythonw main.py
 ### Movimento & Fisica
 | Feature | Dettaglio |
 |---|---|
-| **Movimento smooth** | Velocità + accelerazione, inerzia fisica |
+| **Movimento smart** | Si orienta verso le icone del desktop — 50% probabilità di sceglierle come meta |
 | **Salto con gravità** | `jump_z` + `jump_vel`, gravità 1.4/frame |
 | **Wrap-around schermo** | Esce da un lato, rientra dall'altro |
 | **Dual monitor** | Schermo virtuale Win32 — si muove su tutti i monitor |
-| **Freeze durante speech** | Non si muove mentre ha la bolla di testo |
 | **Schiacciamento** | Corpo si deforma durante la corsa |
 | **Body rotation** | Rotazione durante la corsa veloce |
+| **Boost velocità** | Ogni colpo ricevuto in fuga lo fa accelerare |
 
-### Stati & Comportamenti (23 stati)
+### Stati & Comportamenti (24 stati)
 | Stato | Descrizione |
 |---|---|
-| `IDLE` | Vaga su tutto lo schermo, salta occasionalmente |
-| `SLEEPING` | Si addormenta dopo 40s di cursore fermo, Zzz… |
+| `IDLE` | Vaga notando le icone vicine, le commenta, salta occasionalmente |
+| `SLEEPING` | Si addormenta dopo 40s (20s di notte) — dondola lentamente mentre sogna |
 | `CURIOUS` | Si avvicina al cursore, si spaventa se troppo vicino |
 | `FOLLOWING` | Segue il cursore saltellando |
 | `WAVING` | Saluta con animazione braccio + cuori |
 | `DANCING` | Balla con saltelli ritmici e note musicali |
 | `HANGING` | Si appende a un'icona del desktop |
-| `LEANING` | Si appoggia fisicamente al bordo — braccio tocca il muro |
-| `CORNER` | Si nasconde in un angolo con braccia conserte |
+| `PUSHING` | Spinge fisicamente un'icona attraverso il desktop |
+| `CARRYING` | Porta un'icona sopra la testa — la originale sparisce, replica visiva animata |
 | `SITTING` | Si siede su un'icona e chiacchiera |
+| `LEANING` | Si appoggia al bordo schermo — appare un lampione procedurale |
+| `CORNER` | Si nasconde in un angolo con braccia conserte |
 | `EXHAUSTED` | Si accascia dopo una lunga fuga, ansima con fiatone |
 | `DRINKING` | Beve una birra 🍺, testa che si inclina, poi rutta |
 | `VOLUME_TRICK` | Alza il volume del PC con animazione + barra visiva |
+| `PHONE` | Chiama i complici (Jigen/Goemon/Fujiko) — telefono disegnato, conversazione a bolle |
 | `APPROACHING` | Corre verso un'icona con maschera da ladro |
 | `STEALING` | Ruba l'icona (Win32 LVM32) — esce da un buco nero |
 | `TAUNTING` | Si prende gioco di te con refurtiva orbitante 👑💎🏅 |
-| `RUNNING` | Fuga con wrap-around e gocce di sudore |
+| `RUNNING` | Fuga con wrap-around, gocce di sudore, velocità crescente se colpito |
 | `HIDING` | Si nasconde dietro finestre aperte |
-| `SURRENDER` | Si arrende se cliccato — nessuna lacrima, solo resa |
+| `SURRENDER` | Si arrende solo se cliccato durante TAUNTING — mai durante la fuga |
 | `CELEBRATING` | Festeggia con coriandoli e cuori |
 | `PRANK` | Dispetto: icone a cerchio o caos totale |
 
@@ -87,31 +90,57 @@ pythonw main.py
 | **Alone pulsante** | Glow dorato animato con oscillazione sinusoidale |
 | **Nascosta durante carrying** | L'originale va a -300,-300; al rilascio torna alla posizione salvata |
 
-### Sistema Colpi (Click su Lupin)
+### Interazione Mouse
+| Click | Effetto |
+|---|---|
+| **Clic sinistro su Lupin** | Pugno + particelle + insulto (escalation combo) |
+| **Doppio click su Lupin** | Reazione drammatica potenziata + flash schermo |
+| **Clic destro su Lupin** | Lupin viene accarezzato — cuori, scintille, reazione imbarazzata |
+
+### Sistema Colpi — Stato Normale
 | Combo | Reazione + Particelle |
 |---|---|
-| ×1 | 💢 pugno + 😮 + stelle + "Ow! Che maleducato! 😤" |
-| ×2 | 💥 pugno grande + 😠 + scintille + "BASTARDO! Non colpirmi! 😡" |
-| ×3 | 🤛 + 😡 + onde d'urto + shake schermo + "Chiamo i Carabinieri! 🚔" |
-| ×4 | 👊 + 🤬 + flash + "Articolo 581 cp! 📜" |
-| ×5+ | 💥 + 💀 + flash schermo + "Ti denuncio a 8 tribunali!" |
-| Esausto | "VIGLIACCO! Colpisci un esausto!" |
+| ×1 | 💢 pugno + 😮 + stelle + *"Ow! Che maleducato! 😤"* |
+| ×2 | 💥 pugno grande + 😠 + scintille + *"BASTARDO! Non colpirmi! 😡"* |
+| ×3 | 🤛 + 😡 + onde d'urto + shake + *"Chiamo i Carabinieri! 🚔"* → scappa |
+| ×5+ | 💥 + 💀 + flash schermo + *"Ti denuncio a 8 tribunali!"* |
+| Esausto | *"VIGLIACCO! Colpisci un esausto!"* — salto debolissimo |
 
-> **Click detection**: `GetAsyncKeyState(VK_LBUTTON)` poll ogni frame — nessun hook globale, nessun blocco del mouse. Raggio di rilevamento: ±65px orizzontale, ±90px verticale dal centro Lupin.
+### Sistema Colpi — Durante la Fuga
+Lupin **non si arrende mai** durante la fuga — reagisce progressivamente e accelera:
+
+| Colpo | Reazione |
+|---|---|
+| 1° | Restituisce **una** icona rubata · *"Ok ok LA RIDÒ! Ricordati la mia faccia! 😤"* |
+| 2°–3° | Impreca · *"BASTARDO! Smettila! 💢"* · velocità +1.0 |
+| 4°–5° | *"CHIAMO LA POLIZIA! 113! 📞"* · velocità +3.0 |
+| 6°–7° | *"Sono già sparito! 💨"* · velocità massima (18px/frame) |
+| 8°+ | Crolla esausto — non ce la fa più fisicamente |
+
+> **Click detection**: `GetAsyncKeyState(VK_LBUTTON)` bit 0 (was-pressed) — nessun hook globale, nessun blocco del mouse. Raggio: ±75px orizzontale, ±100px verticale dal centro Lupin.
+
+### Comportamenti Temporali
+| Ora | Comportamento |
+|---|---|
+| **23:00 – 06:00** | Si addormenta dopo 20s (invece di 40s), telefonate più frequenti |
+| **12:00 – 14:00** | Beve più birre (pausa pranzo) |
+| **Ogni 8–12 minuti** | Commenta l'ora con battute tematiche (mattina/pranzo/sera/notte) |
 
 ### Effetti Visivi
 | Feature | Dettaglio |
 |---|---|
 | **Particelle** | 10 tipi: sparkle, smoke, heart, note, zzz, confetti, star, sweat, dust, emoji_pain |
+| **Lampione procedurale** | Palo metallico + braccio curvo + lanterna pulsante in LEANING su bordo schermo |
+| **Telefono disegnato** | Braccio alzato + rettangolo nero con schermo blu in stato PHONE |
 | **Maschera da ladro** | Striscia nera in APPROACHING/STEALING |
 | **Refurtiva orbitante** | 👑💎🏅✨🪙💍 con alone dorato |
 | **Barra volume** | HUD animato verde→giallo→rosso + 🔊 |
 | **Toast notifications** | Slide-in da destra con countdown |
-| **Speech bubble** | Bolla con scale-in, coda, word-wrap |
+| **Speech bubble** | Bolla con scale-in, drop shadow, bordo scuro, font emoji |
 | **Screen shake** | Intensità proporzionale al combo colpi |
 | **Trail corsa** | Scia ellissoidale semi-trasparente |
 | **Shadow dinamica** | Si rimpicciolisce con l'altezza del salto |
-| **Dust particelle** | Nuvole di polvere durante corsa/caduta |
+| **Portale buco nero** | Vortice viola con scintille orbitanti |
 
 ### Animazioni Corpo
 | Parte | Animazione |
@@ -120,7 +149,7 @@ pythonw main.py
 | **Occhi** | Tracking cursore con pupille, blink casuale |
 | **Bocca** | Sorriso, O-sorpresa, smorfia, ansimante, linguaccia animata |
 | **Maschera** | Striscia nera da ladro in APPROACHING/STEALING |
-| **Braccia** | Pose per ogni stato: saluto, ballo, trasporto, spinta, appoggio, birra |
+| **Braccia** | Pose per ogni stato: saluto, ballo, trasporto, spinta, appoggio, birra, telefono |
 | **Gambe** | Corsa alternata, seduto disteso, accasciato esausto |
 | **Guance** | Rossore per stati felici/eccitati |
 | **Cappello** | Lupin III con tesa, corpo e fascetta rossa |
@@ -145,7 +174,7 @@ pythonw main.py
 ```
 lupin-desktop-pet/
 ├── main.py              # Entry point
-├── pet_brain.py         # State machine (23 stati, fisica, AI comportamentale)
+├── pet_brain.py         # State machine (24 stati, fisica, AI comportamentale)
 ├── pet_window.py        # PyQt5 overlay + renderer procedurale Lupin
 ├── desktop_hooks.py     # Win32 API — LVM_SETITEMPOSITION32, LVM_GETITEMTEXT
 ├── sound_manager.py     # Audio pygame-ce
