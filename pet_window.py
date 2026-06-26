@@ -179,6 +179,8 @@ class PetWindow(QMainWindow):
 
         self._prev_hit_reaction = ""
         self._lbutton_prev = False
+        self._rbutton_prev = False
+        self._last_lclick_t = 0    # per double-click detection
 
         self._icon_tick = 0
         self._loop_timer = QTimer()
@@ -205,10 +207,25 @@ class PetWindow(QMainWindow):
         if lbtn and not self._lbutton_prev:
             try:
                 mx, my = win32api.GetCursorPos()
-                self._handle_global_click(mx, my)
+                now = self.brain.global_timer
+                if now - self._last_lclick_t < 30:   # double-click (≤500ms a 60fps)
+                    self._handle_double_click(mx, my)
+                else:
+                    self._handle_global_click(mx, my)
+                self._last_lclick_t = now
             except Exception:
                 pass
         self._lbutton_prev = lbtn
+
+        # ── Right-click: petting ─────────────────────────────
+        rbtn = bool(ctypes.windll.user32.GetAsyncKeyState(0x02) & 0x8000)
+        if rbtn and not self._rbutton_prev:
+            try:
+                mx, my = win32api.GetCursorPos()
+                self._handle_right_click(mx, my)
+            except Exception:
+                pass
+        self._rbutton_prev = rbtn
 
         self._icon_tick += 1
         if self._icon_tick >= 200:
@@ -217,8 +234,8 @@ class PetWindow(QMainWindow):
 
         prev_x, prev_y = self.brain.x, self.brain.y
         prev_state = self.brain.state
-        # Freeze movimento mentre parla
-        self.brain.frozen = self.speech_active
+        # Freeze movimento mentre parla (ma non durante il sonno — deve dondolare)
+        self.brain.frozen = self.speech_active and state != S.SLEEPING
         self.brain.update(self.icons)
         nfo = self.brain.info
         state = nfo["state"]
@@ -284,6 +301,8 @@ class PetWindow(QMainWindow):
                 self._say(nfo["current_joke"] or "VOLUME AL MASSIMO! 🔊", 260)
             elif state == S.DRINKING:
                 self._say(nfo["current_joke"] or "Salute! 🍺", 240)
+            elif state == S.PHONE:
+                self._say(nfo["current_joke"] or "Pronto? Sono Lupin. 📱", 200)
 
         # Auto-restore speech (brain setta current_joke e lo consuma)
         if nfo.get("current_joke") and "sistemo" in nfo["current_joke"] and not self.speech_active:
@@ -394,6 +413,17 @@ class PetWindow(QMainWindow):
                 self.particles.append(Particle(
                     nfo["x"] + random.randint(-45, 45), nfo["y"] - 20,
                     QColor(255, 80, 140), 16, ptype="heart"))
+
+        # Phone: aggiorna speech bubble con le nuove battute dal brain
+        if state == S.PHONE and not self.speech_active and nfo["current_joke"]:
+            self._say(nfo["current_joke"], 190)
+        # Segnale telefono (onde 📶) emesse ogni 90 frame
+        if state == S.PHONE and t % 90 == 0:
+            for i, sym in enumerate(["📶", "✨", "📶"]):
+                self.particles.append(Particle(
+                    nfo["x"] + 32 + i * 6, nfo["y"] - 50 - i * 8,
+                    QColor(100, 220, 100, 220), 14,
+                    random.uniform(0.2, 0.6), random.uniform(-1.2, -0.4), "note"))
 
         # Speech periodici per stati "in posa"
         if state == S.LEANING and t % 280 == 60 and not self.speech_active:
@@ -882,6 +912,20 @@ class PetWindow(QMainWindow):
             p.setBrush(QBrush(SKIN_COLOR)); p.setPen(QPen(OUTLINE,1))
             p.drawEllipse(-14, int(-8+cross), 10, 10)
             p.drawEllipse(  4, int(-8-cross), 10, 10)
+
+        elif state == S.PHONE:
+            # Braccio sinistro alzato con cellulare all'orecchio
+            wobble = math.sin(timer * 0.12) * 4
+            p.drawLine( 19, -18,  28, int(14 + wobble))   # altro giù
+            p.drawLine(-19, -20, -44, int(-38 + wobble))  # braccio al telefono
+            p.setBrush(QBrush(SKIN_COLOR)); p.setPen(QPen(OUTLINE, 1))
+            p.drawEllipse(-50, int(-45 + wobble), 11, 11)
+            # Telefono (piccolo rettangolo nero)
+            p.setBrush(QBrush(QColor(30, 30, 30))); p.setPen(QPen(QColor(80, 80, 80), 1))
+            p.drawRoundedRect(-60, int(-50 + wobble), 14, 22, 3, 3)
+            # Schermino del telefono (luce blu)
+            p.setBrush(QBrush(QColor(100, 180, 255, 200))); p.setPen(Qt.NoPen)
+            p.drawRoundedRect(-58, int(-48 + wobble), 10, 14, 2, 2)
 
         elif state == S.SURRENDER:
             p.drawLine(-19, -18, -25, 22)
@@ -1433,10 +1477,43 @@ class PetWindow(QMainWindow):
         """Processa un click globale: reagisce solo se vicino a Lupin."""
         nfo = self.brain.info
         px, py = nfo["x"], nfo["y"]
-        # Lupin ha bounding-box circa 60px larghezza × 120px altezza
         if abs(mx - px) > 65 or abs(my - (py - 40)) > 90:
             return
         self._do_hit(mx, my)
+
+    def _handle_double_click(self, mx, my):
+        """Doppio click vicino a Lupin: reazione drammatica."""
+        nfo = self.brain.info
+        px, py = nfo["x"], nfo["y"]
+        if abs(mx - px) > 65 or abs(my - (py - 40)) > 90:
+            return
+        self.brain.hit_combo = max(self.brain.hit_combo, 2)
+        self.brain.on_click()
+        joke = self.brain.say("double_click")
+        self._say(joke, 280)
+        self.shake_int = 18
+        self.flash_a = 220
+        for _ in range(14):
+            self.particles.append(Particle(
+                px + random.randint(-30, 30), py - random.randint(20, 60),
+                QColor(255, 50, 50), random.randint(14, 24),
+                random.uniform(-3, 3), random.uniform(-5, -2), "star"))
+
+    def _handle_right_click(self, mx, my):
+        """Click destro vicino a Lupin: lo si accarezza."""
+        nfo = self.brain.info
+        px, py = nfo["x"], nfo["y"]
+        if abs(mx - px) > 70 or abs(my - (py - 40)) > 100:
+            return
+        joke = self.brain.say("pet")
+        self._say(joke, 200)
+        self.brain.mood = "happy"
+        self._spawn_hearts(px, py - 30, 8)
+        for _ in range(5):
+            self.particles.append(Particle(
+                px + random.randint(-25, 25), py - random.randint(30, 70),
+                QColor(255, 220, 255), random.randint(12, 20),
+                random.uniform(-1, 1), random.uniform(-2, -0.5), "sparkle"))
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton:

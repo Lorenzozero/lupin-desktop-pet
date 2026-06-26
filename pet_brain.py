@@ -26,11 +26,12 @@ class S(Enum):
     SURRENDER    = auto()
     CELEBRATING  = auto()
     PRANK        = auto()
+    PHONE        = auto()   # chiama i complici
 
 FRIENDLY_STATES = {S.IDLE, S.SLEEPING, S.CURIOUS, S.FOLLOWING,
                    S.WAVING, S.DANCING, S.HANGING, S.CELEBRATING,
                    S.PUSHING, S.CARRYING, S.SITTING, S.LEANING, S.CORNER,
-                   S.EXHAUSTED, S.DRINKING}
+                   S.EXHAUSTED, S.DRINKING, S.PHONE}
 
 # Battute italiane per ogni situazione
 JOKES = {
@@ -208,6 +209,53 @@ JOKES = {
                    "Questo posto è mio! 😤",
                    "Quanti file inutili hai... 🗂️",
                    "Potrei stare qui per ore! 😴"],
+    "phone_open": ["Pronto? Sono Lupin. 📱",
+                   "Jigen? Svegliati, ho un piano! 🤫",
+                   "Goemon! Serve la katana stanotte! 🗡️",
+                   "Fujiko... so già che mi tradirai. 😒",
+                   "Pronto? Sì, sono libero. Quasi. 📞"],
+    "phone_conv": ["Il target: desktop con 12 icone. Alto rischio. 🎯",
+                   "Zenigata è in ritardo come al solito. 🚔",
+                   "Operazione Icone: stanotte alle 3. 🌙",
+                   "No, NON è un furto. È... prestito prolungato. 😇",
+                   "Il piano è semplice. Quasi. Abbastanza. 🗺️",
+                   "Ho già rubato in 47 paesi. Questo è niente. 🌍",
+                   "Tecnicamente le icone non sono mie ma... 🤔",
+                   "Silenzio radio. Mi segue qualcuno. 👀",
+                   "Il bottino vale milioni... di pixel. 💎",
+                   "Ok, cambio piano. Il primo era troppo brillante. 😅"],
+    "phone_end":  ["Ok riattacco. Mi segue uno sbirro. 👮",
+                   "Ciao! Scappo. 🏃",
+                   "A dopo. Cose da rubare! 🎩",
+                   "Devo andare. Fino alla prossima rapina! 💨",
+                   "Riattacco. Non chiamare su questa linea. 🔇"],
+    "pet":        ["Ehi! Stai carezzando un ladro! 😳",
+                   "Oddio... quasi quasi mi piacevi. 😳",
+                   "Ah... non male. Ma non illuderti! 😊",
+                   "Continua pure... per motivi professionali. 😌",
+                   "Ok questo è inaspettato. Grazie? 🥹",
+                   "Non lo dire a nessuno! Ho una reputazione! 😤"],
+    "double_click": ["HAI CLICCATO DUE VOLTE! PROCESSO IMMEDIATO! ⚖️",
+                     "DUE? DUE CLICK?! Sei pazzo! 😤",
+                     "Doppio click = doppio reato! 📜",
+                     "Non sono una cartella, IGNORANTE! 😡",
+                     "Articolo 581 cp AGGRAVATO! 🚔"],
+    "time_morning":["Già sveglio? Nemmeno io. 😴☕",
+                    "Buongiorno... credo. 😪",
+                    "Mattina. La fase più crudele del giorno. ☕"],
+    "time_lunch":  ["Ora di pranzo! 🍕 Io rubo, tu mangi.",
+                    "Pausa pranzo! Anch'io mi fermo... per un attimo. 🍺",
+                    "Mezzogiorno. Ora di sparire. 🥸"],
+    "time_afternoon": ["Pomeriggio produttivo... per me! 😈",
+                       "Ore di punta del desktop. Perfette. 😏",
+                       "Sonnellino pomeridiano? No. Rapina pomeridiana. 🎩"],
+    "time_evening":["Bella serata! Per chi non ha icone, intendo. 🌅",
+                    "Si fa sera... il mio momento preferito. 🌙",
+                    "Tramonto. Poetico. Furto. Pratico. 🌇"],
+    "time_night":  ["Di notte lavoro meglio. 🌙",
+                    "Tutti dormono. Io no. 😈",
+                    "Mezzanotte. Ora X. 🕛",
+                    "L'oscurità è la mia alleata. 🖤"],
 }
 
 class LupinBrain:
@@ -297,6 +345,13 @@ class LupinBrain:
         self._exhausted_rest_pos = None
         self._volume_presses     = 0
         self._icons = {}
+
+        # Phone state
+        self.phone_conv_idx  = 0
+        self._phone_duration = 0
+
+        # Commenti sull'ora (ogni ~8-12 minuti di global_timer)
+        self._commentary_next = random.randint(28800, 43200)  # 8-12 min a 60fps
 
         # Freeze movimento durante speech
         self.frozen = False
@@ -462,15 +517,32 @@ class LupinBrain:
             S.SURRENDER:   lambda: self._surrender(),
             S.CELEBRATING: lambda: self._celebrating(),
             S.PRANK:       lambda: self._prank(icons),
+            S.PHONE:       lambda: self._phone(),
         }[self.state]()
+
+        # Commento sull'ora ogni 8-12 minuti (se idle/non occupato)
+        if (self.global_timer >= self._commentary_next
+                and self.state in (S.IDLE, S.LEANING, S.SITTING, S.CORNER)
+                and not self.frozen):
+            self._commentary_next = self.global_timer + random.randint(28800, 43200)
+            h = datetime.now().hour
+            if h < 6:   key = "time_night"
+            elif h < 12: key = "time_morning"
+            elif h < 14: key = "time_lunch"
+            elif h < 18: key = "time_afternoon"
+            elif h < 22: key = "time_evening"
+            else:        key = "time_night"
+            self.say(key)
 
     # ── stati ────────────────────────────────────────────────
 
     def _idle(self, icons):
         self.mood = "happy"
 
-        # Sonno dopo ~40 secondi di cursore fermo
-        if self.cursor_idle_frames > 2400:
+        # Sonno dopo ~40 secondi di cursore fermo (20s di notte)
+        h = datetime.now().hour
+        sleep_threshold = 1200 if (h >= 23 or h < 6) else 2400
+        if self.cursor_idle_frames > sleep_threshold:
             self._transition(S.SLEEPING)
             return
 
@@ -578,16 +650,27 @@ class LupinBrain:
                 self._transition(S.VOLUME_TRICK)
                 return
             if r < 0.028:
-                # Beve una birra
-                self.say("drinking")
-                self._transition(S.DRINKING)
-                return
+                # Beve una birra (più probabile a pranzo 12-14)
+                h = datetime.now().hour
+                if h < 10 or h > 22 or random.random() < (0.6 if 12 <= h < 14 else 0.3):
+                    self.say("drinking")
+                    self._transition(S.DRINKING)
+                    return
+            if r < 0.032:
+                # Telefonata ai complici (più probabile di sera/notte)
+                h = datetime.now().hour
+                night_boost = 1.8 if (h >= 22 or h < 6) else 1.0
+                if random.random() < 0.5 * night_boost:
+                    self._phone_duration = random.randint(360, 560)
+                    self.say("phone_open")
+                    self._transition(S.PHONE)
+                    return
             # Linguaccia casuale (senza cambiare stato)
-            if r < 0.031 and self.tongue_timer == 0:
+            if r < 0.035 and self.tongue_timer == 0:
                 self.say("linguaccia")
                 self.tongue_timer = 55
             # Rutto casuale
-            if r < 0.034 and self.tongue_timer == 0:
+            if r < 0.038 and self.tongue_timer == 0:
                 self.say("burp")
                 self.burp_pending = True
                 self.tongue_timer = 40
@@ -1045,6 +1128,20 @@ class LupinBrain:
             self._jump(12)
             self._transition(S.IDLE)
 
+    def _phone(self):
+        """Lupin chiama i complici e pianifica una rapina."""
+        self.mood = "smug"
+        self.vx *= 0.7;  self.vy *= 0.7   # rallenta, quasi fermo
+
+        # Ogni 80 frame cambia battuta
+        if self.timer % 80 == 0 and self.timer < self._phone_duration - 80:
+            self.say("phone_conv")
+
+        if self.timer >= self._phone_duration:
+            self.say("phone_end")
+            self._jump(10)
+            self._transition(S.IDLE)
+
     def _surrender(self):
         self.mood = "sad"
         if self.timer > 80:
@@ -1235,4 +1332,5 @@ class LupinBrain:
             hour=h,
             current_joke=self.current_joke,
             hang_target=self.hang_target,
+            is_phone=self.state == S.PHONE,
         )
