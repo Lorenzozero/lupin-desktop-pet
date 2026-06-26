@@ -178,7 +178,9 @@ class PetWindow(QMainWindow):
         self.greeted = False
 
         self._prev_hit_reaction = ""
-        self._last_lclick_t = 0    # per double-click detection
+        self._last_lclick_t  = 0
+        self._lbutton_down   = False   # edge detection sinistro
+        self._rbutton_down   = False   # edge detection destro
 
         self._icon_tick = 0
         self._loop_timer = QTimer()
@@ -200,20 +202,27 @@ class PetWindow(QMainWindow):
     # ── Main loop ────────────────────────────────────────────
 
     def _loop(self):
-        # ── Click detection: bit 0 = was-pressed-since-last-call (non perde click rapidi) ──
-        if ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x0001:
-            mx, my = win32api.GetCursorPos()
-            now = self.brain.global_timer
-            if now - self._last_lclick_t < 30:
-                self._handle_double_click(mx, my)
-            else:
-                self._handle_global_click(mx, my)
-            self._last_lclick_t = now
+        try:
+            # ── Click sinistro: edge hi→lo su bit 15 (sempre affidabile) ──
+            ldown = bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
+            if ldown and not self._lbutton_down:
+                mx, my = win32api.GetCursorPos()
+                now = self.brain.global_timer
+                if now - self._last_lclick_t < 30:
+                    self._handle_double_click(mx, my)
+                else:
+                    self._handle_global_click(mx, my)
+                self._last_lclick_t = now
+            self._lbutton_down = ldown
 
-        # ── Right-click: petting ─────────────────────────────
-        if ctypes.windll.user32.GetAsyncKeyState(0x02) & 0x0001:
-            mx, my = win32api.GetCursorPos()
-            self._handle_right_click(mx, my)
+            # ── Click destro: petting ──────────────────────────
+            rdown = bool(ctypes.windll.user32.GetAsyncKeyState(0x02) & 0x8000)
+            if rdown and not self._rbutton_down:
+                mx, my = win32api.GetCursorPos()
+                self._handle_right_click(mx, my)
+            self._rbutton_down = rdown
+        except Exception:
+            import traceback; traceback.print_exc()
 
         self._icon_tick += 1
         if self._icon_tick >= 200:
@@ -1465,7 +1474,7 @@ class PetWindow(QMainWindow):
         """Processa un click globale: reagisce solo se vicino a Lupin."""
         nfo = self.brain.info
         px, py = nfo["x"], nfo["y"]
-        if abs(mx - px) > 75 or abs(my - (py - 40)) > 100:
+        if abs(mx - px) > 90 or abs(my - (py - 40)) > 110:
             return
         self._do_hit(mx, my)
 
@@ -1473,7 +1482,7 @@ class PetWindow(QMainWindow):
         """Doppio click vicino a Lupin: reazione drammatica."""
         nfo = self.brain.info
         px, py = nfo["x"], nfo["y"]
-        if abs(mx - px) > 65 or abs(my - (py - 40)) > 90:
+        if abs(mx - px) > 90 or abs(my - (py - 40)) > 110:
             return
         self.brain.hit_combo = max(self.brain.hit_combo, 2)
         self.brain.on_click()
@@ -1491,7 +1500,7 @@ class PetWindow(QMainWindow):
         """Click destro vicino a Lupin: lo si accarezza."""
         nfo = self.brain.info
         px, py = nfo["x"], nfo["y"]
-        if abs(mx - px) > 70 or abs(my - (py - 40)) > 100:
+        if abs(mx - px) > 90 or abs(my - (py - 40)) > 110:
             return
         joke = self.brain.say("pet")
         self._say(joke, 200)
@@ -1511,12 +1520,13 @@ class PetWindow(QMainWindow):
         nfo = self.brain.info
         px, py = nfo["x"], nfo["y"]
         mx, my = e.x() + self._vx, e.y() + self._vy
-        if abs(mx - px) > 65 or abs(my - (py - 40)) > 90:
+        if abs(mx - px) > 90 or abs(my - (py - 40)) > 110:
             return
         self._do_hit(mx, my)
 
     def _do_hit(self, mx, my):
         """Logica colpo: particelle + speech bubble."""
+        self.flash_a = max(self.flash_a, 60)   # flash immediato di conferma
         prev_combo = self.brain.hit_combo
         self.brain.on_click()
         nfo = self.brain.info
