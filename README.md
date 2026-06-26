@@ -80,6 +80,72 @@ precisi su qualsiasi configurazione di schermi.
 
 ---
 
+## 📋 Tutte le funzionalità interattive
+
+### Interazione col mouse
+| Azione | Reazione di Lupin |
+|---|---|
+| **Mouse si avvicina** (<180px) | Si allontana lentamente, a disagio |
+| **Mouse troppo vicino** (<85px) | Scatta in fuga impaurito |
+| **Click sinistro su Lupin** | Pugno + particelle + insulto (escalation a combo) |
+| **Doppio click** | Reazione drammatica potenziata + flash schermo |
+| **Click destro** (carezza) | Cuori, scintille, reazione imbarazzata |
+| **Click mentre trasporta un'icona** | *"Scusa!"* → rimette l'icona al suo posto |
+| **Click mentre schernisce/prank** | Si arrende → ripristina tutto il desktop |
+| **ESC** | Chiude e ripristina ogni icona |
+
+### Sistema colpi — stato normale
+| Combo | Reazione |
+|---|---|
+| ×1 | *"Ehi STRONZO! Attento!"* — pugno + stelle |
+| ×2 | *"BASTARDO! Non colpirmi!"* — scintille |
+| ×3 | *"CHIAMO LA POLIZIA! 113!"* — shake + scappa |
+| ×5 | *"Ti denuncio a 8 tribunali!"* — flash + fuga |
+| esausto | *"VIGLIACCO! Colpisci un esausto!"* — salto debolissimo |
+
+### Sistema colpi — durante la fuga *(non si arrende mai)*
+| Colpo | Reazione |
+|---|---|
+| 1° | Restituisce **una** icona rubata · *"Ok LA RIDÒ!"* |
+| 2°–3° | Impreca e accelera · *"BASTARDO, smettila!"* |
+| 4°–5° | Minaccia · *"CHIAMO LA POLIZIA!"* · più veloce |
+| 6°–7° | *"Sono già sparito!"* · velocità massima |
+| 8°+ | Crolla esausto — non ce la fa più |
+
+### I 24 stati
+| Stato | Cosa fa |
+|---|---|
+| `IDLE` | Vaga notando le icone, le commenta, salta |
+| `SLEEPING` | Si addormenta (prima di notte) e dondola sognando |
+| `CURIOUS` / `FOLLOWING` | Si avvicina / segue il cursore saltellando |
+| `WAVING` / `DANCING` | Saluta con cuori / balla con note musicali |
+| `HANGING` / `PUSHING` | Si appende a un'icona / la spinge sul desktop |
+| `APPROACHING` / `STEALING` | Corre con la maschera / spinge e ruba l'icona |
+| `CARRYING` | Porta l'icona sopra la testa col titolo reale |
+| `TAUNTING` | Si prende gioco di te con la refurtiva |
+| `RUNNING` / `HIDING` | Fuga con wrap-around / si nasconde vicino a una finestra |
+| `EXHAUSTED` | Si accascia ansimando dopo una lunga fuga |
+| `SURRENDER` / `CELEBRATING` | Si arrende / festeggia con coriandoli |
+| `SITTING` / `LEANING` / `CORNER` | Si siede / si appoggia (con lampione) / sta in un angolo |
+| `DRINKING` / `PHONE` / `VOLUME_TRICK` | Beve una birra e rutta / chiama i complici / alza il volume |
+| `PRANK` | Sparpaglia le icone in cerchio o nel caos |
+
+### Comportamenti temporali
+| Quando | Cosa cambia |
+|---|---|
+| **23:00 – 06:00** | Si addormenta prima, telefonate più frequenti |
+| **12:00 – 14:00** | Beve più birre (pausa pranzo) |
+| **Ogni 8–12 min** | Commenta l'ora con battute a tema |
+
+### Personalità *(casuale a ogni avvio)*
+| Tipo | Aggressività | Distanza fuga | Avidità |
+|---|---|---|---|
+| 😤 Aggressive | Alta | 280px | 85% |
+| 🎮 Playful | Media | 380px | 65% |
+| 🥷 Sneaky | Bassa | 480px | 45% |
+
+---
+
 ## 👤 Autore
 
 **Lorenzo Garoffolo** · [Portfolio](https://lorenzo-garoffolo-cyber.netlify.app/) · [GitHub @Lorenzozero](https://github.com/Lorenzozero)
